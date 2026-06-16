@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "reviews.jsonl record",
+  "description": "One line per answer in <domain>/logs/reviews.jsonl (append-only history).",
+  "type": "object",
+  "required": ["id", "ts", "grade", "session"],
+  "properties": {
+    "id": { "type": "string", "description": "question id, e.g. aws-clf-s3-03" },
+    "ts": { "type": "string", "description": "ISO8601 timestamp with offset" },
+    "grade": { "type": "integer", "minimum": 1, "maximum": 4, "description": "1=Again 2=Hard 3=Good 4=Easy" },
+    "session": { "type": "string", "description": "session label, e.g. 2026-06-16-0930" }
+  },
+  "additionalProperties": false
+}

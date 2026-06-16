@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "question markdown (frontmatter + sections)",
+  "description": "One question per .md file under <domain>/questions/. This schema documents the YAML frontmatter; the body uses '## Q', optional '## Choices', '## A', '## Explanation', optional '## Speak'.",
+  "type": "object",
+  "required": ["id", "domain", "type", "grade_scale", "source", "created"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "globally unique. Convention: <domain-with-dashes>-<topic>-<NN> (aws-clf-s3-03) or <domain-with-dashes>-<NNNN> (english-core-0001)."
+    },
+    "domain": { "type": "string", "pattern": "^[a-z0-9-]+/[a-z0-9-]+$", "description": "e.g. aws/clf, english/core" },
+    "topic": { "type": "string" },
+    "type": { "enum": ["single_choice", "multi", "cloze", "translation", "free"] },
+    "grade_scale": { "type": "integer", "description": "4 = Again/Hard/Good/Easy" },
+    "source": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "minItems": 1,
+      "description": "primary-source URLs (required by policy; questions are generated from sources, not copied)"
+    },
+    "created": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "speak": { "type": "string", "description": "optional; English text the app reads aloud with `say`" }
+  },
+  "additionalProperties": true
+}

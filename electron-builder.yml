@@ -1,0 +1,15 @@
+appId: com.akira-toriyama.study
+productName: Study
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**
+  - package.json
+  - node_modules/**
+mac:
+  category: public.app-category.education
+  target:
+    - target: dir
+      arch: arm64
+asar: true
