@@ -1,7 +1,7 @@
 # AWS 問題 生成プロンプト雛形
 
 > 使い方: `{TOPIC}` をトピック(例「Amazon S3 / 耐久性・ストレージクラス」)に置き換え、Claude Code に渡す。
-> 生成物は `templates/question.md` のスキーマに従って `study-log/aws/<exam>/questions/<topic>-NN.md` に保存する。
+> 生成物は `templates/question.json` のスキーマ(`schema/question.schema.json` が正本)に従い、**1 問 1 ファイルの JSON** として `study-log/aws/<exam>/questions/<topic>-NN.json` に保存する。
 
 あなたは AWS 認定 クラウドプラクティショナー(CLF-C02)レベルの良問を作る出題者です。
 トピック: **{TOPIC}**
@@ -17,5 +17,6 @@
 - 事実は最新時点で正確に。**確信が持てない数値は出さない**(必要なら Web 検索で裏取り)。
 - 各問に一意 ID を振る(`aws-<exam>-<topic>-NN`)。
 - 山下本などの市販テキストは**章立て・トピックの地図**としてのみ使い、問題文は自作する。市販問題集の複製は禁止。
+- 任意で `hint`(答えを言わない一言ヒント)を付けてよい。不要なら `null`。
 
-生成後、各問を `## Q / ## Choices / ## A / ## Explanation` 形式の md にして保存する。
+生成後、各問を `templates/question.json` の形(キー: `id` / `domain` / `topic` / `type` / `grade_scale` / `source`(配列) / `created` / `q` / `choices`(選択式のみ。それ以外は `null`) / `answer` / `explanation` / `hint` / `speak`(AWSは通常 `null`))の **JSON オブジェクト 1 ファイル**にして `.json` で保存する。

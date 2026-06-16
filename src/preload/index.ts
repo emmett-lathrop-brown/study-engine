@@ -43,6 +43,7 @@ const api = {
   commit: (message: string): Promise<{ ok: boolean; out: string }> =>
     ipcRenderer.invoke('git:commit', message),
   deepDivePrompt: (a: DeepDiveArgs): Promise<string> => ipcRenderer.invoke('deepdive:prompt', a),
+  copyToClipboard: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open:external', url),
 
   claudeStatus: (): Promise<{ installed: boolean; connected: boolean; detail: string }> =>

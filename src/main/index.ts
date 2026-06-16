@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'child_process'
 import { existsSync, promises as fs, readdirSync } from 'fs'
 import { homedir } from 'os'
@@ -272,6 +272,7 @@ function registerIpc(): void {
   })
   ipcMain.handle('git:commit', (_e, message: string) => commit(message))
   ipcMain.handle('deepdive:prompt', (_e, a: DeepDiveArgs) => deepDivePrompt(a))
+  ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
   ipcMain.handle('open:external', (_e, url: string) => shell.openExternal(url))
 
   ipcMain.handle('claude:status', () => claudeStatus())

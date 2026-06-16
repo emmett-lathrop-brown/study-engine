@@ -1,0 +1,21 @@
+{
+  "id": "aws-clf-s3-03",
+  "domain": "aws/clf",
+  "topic": "s3",
+  "type": "single_choice",
+  "grade_scale": 4,
+  "source": [
+    "https://docs.aws.amazon.com/AmazonS3/latest/userguide/..."
+  ],
+  "created": "2026-06-16",
+  "q": "問題文をここに。AWSは日本語、英語問題は「日本語の指示 + 対象英文」。",
+  "choices": [
+    "A. 選択肢A",
+    "B. 選択肢B",
+    "C. 選択肢C"
+  ],
+  "answer": "C",
+  "explanation": "要点を自分の言葉で。出典本文の丸写しは禁止。なぜ他の選択肢が誤りかも一言。",
+  "hint": null,
+  "speak": null
+}

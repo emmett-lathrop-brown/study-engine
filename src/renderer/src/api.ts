@@ -43,6 +43,7 @@ export interface StudyApi {
   stopSpeak(): Promise<void>
   commit(message: string): Promise<{ ok: boolean; out: string }>
   deepDivePrompt(a: DeepDiveArgs): Promise<string>
+  copyToClipboard(text: string): Promise<void>
   openExternal(url: string): Promise<void>
   claudeStatus(): Promise<ClaudeStatus>
   claudeAsk(prompt: string, model?: string): Promise<AskResult>

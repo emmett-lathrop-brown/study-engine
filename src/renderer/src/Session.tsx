@@ -44,6 +44,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
   const [hintLoading, setHintLoading] = useState(false)
   const [dive, setDive] = useState<string | null>(null)
   const [diveLoading, setDiveLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const q = questions[index]
   const choice = isChoiceType(q.type)
@@ -70,6 +71,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     setHintLoading(false)
     setDive(null)
     setDiveLoading(false)
+    setCopied(false)
   }, [index])
 
   const reveal = useCallback(() => setRevealed(true), [])
@@ -176,6 +178,23 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     )
     setDiveLoading(false)
     setDive(r.ok ? (r.text ?? '') : `取得失敗: ${r.error ?? ''}`)
+  }
+
+  // Copy a rich deep-dive prompt for a full Claude Code chat session — the
+  // path that can read the file and grow learned/ (the in-app 🤔 is one-shot
+  // and can't write files). See study-engine CLAUDE.md §7.
+  const copyForChat = async (): Promise<void> => {
+    const userAns = choice ? selection.join(',') : text
+    const prompt = await api.deepDivePrompt({
+      id: q.id,
+      file: q.file,
+      domain,
+      q: q.q,
+      answer: q.answer,
+      userAnswer: userAns || undefined
+    })
+    await api.copyToClipboard(prompt)
+    setCopied(true)
   }
 
   const canReveal = choice ? selection.length > 0 : true
@@ -295,6 +314,10 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
               <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
                 🤔 深掘り
               </button>
+              <button className="ghost-btn" onClick={copyForChat} title="learned/ を育てる深掘りプロンプトをコピー">
+                📋 Claude Codeへ
+              </button>
+              {copied && <span className="answer-hint">コピーしました(Claude Code チャットに貼り付け)</span>}
             </div>
           </div>
         )}
