@@ -20,6 +20,17 @@ export interface DeepDiveArgs {
   gradeLabel?: string
 }
 
+export interface ClaudeStatus {
+  installed: boolean
+  connected: boolean
+  detail: string
+}
+export interface AskResult {
+  ok: boolean
+  text?: string
+  error?: string
+}
+
 export interface StudyApi {
   getConfig(): Promise<Settings>
   pickRoot(): Promise<Settings>
@@ -33,6 +44,9 @@ export interface StudyApi {
   commit(message: string): Promise<{ ok: boolean; out: string }>
   deepDivePrompt(a: DeepDiveArgs): Promise<string>
   openExternal(url: string): Promise<void>
+  claudeStatus(): Promise<ClaudeStatus>
+  claudeAsk(prompt: string, model?: string): Promise<AskResult>
+  claudeLogin(): Promise<{ ok: boolean; detail: string }>
 }
 
 declare global {
@@ -42,3 +56,6 @@ declare global {
 }
 
 export const api: StudyApi = window.api
+
+// macOS `say` voices offered in the UI (English read-aloud).
+export const VOICES = ['Samantha', 'Alex', 'Daniel', 'Karen', 'Moira', 'Tessa']

@@ -43,7 +43,13 @@ const api = {
   commit: (message: string): Promise<{ ok: boolean; out: string }> =>
     ipcRenderer.invoke('git:commit', message),
   deepDivePrompt: (a: DeepDiveArgs): Promise<string> => ipcRenderer.invoke('deepdive:prompt', a),
-  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open:external', url)
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open:external', url),
+
+  claudeStatus: (): Promise<{ installed: boolean; connected: boolean; detail: string }> =>
+    ipcRenderer.invoke('claude:status'),
+  claudeAsk: (prompt: string, model?: string): Promise<{ ok: boolean; text?: string; error?: string }> =>
+    ipcRenderer.invoke('claude:ask', prompt, model),
+  claudeLogin: (): Promise<{ ok: boolean; detail: string }> => ipcRenderer.invoke('claude:login')
 }
 
 export type StudyApi = typeof api

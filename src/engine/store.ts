@@ -1,69 +1,34 @@
 import { promises as fs, existsSync } from 'fs'
 import * as path from 'path'
-import matter from 'gray-matter'
 import type { Question, QType, Review, StateMap } from './types'
 
 // Storage layer over the private study-log repo:
-//   <root>/<domain>/questions/*.md     one question per file (frontmatter + sections)
+//   <root>/<domain>/questions/*.json   one question per file (structured source of truth)
 //   <root>/<domain>/logs/reviews.jsonl append-only answer history
 //   <root>/srs/state.json              global SM-2 state, keyed by question id
+// Human/Obsidian-facing markdown is produced on demand by the exporter, not stored here.
 
 export function domainPrefix(domain: string): string {
   return domain.replace(/\//g, '-') + '-'
 }
 
-function parseSections(body: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  let cur: string | null = null
-  let buf: string[] = []
-  const flush = (): void => {
-    if (cur) out[cur.toLowerCase()] = buf.join('\n').trim()
-    buf = []
-  }
-  for (const ln of body.split(/\r?\n/)) {
-    const m = ln.match(/^##\s+(.+?)\s*$/)
-    if (m) {
-      flush()
-      cur = m[1].trim()
-    } else if (cur) {
-      buf.push(ln)
-    }
-  }
-  flush()
-  return out
-}
-
-function parseChoices(s: string | undefined): string[] | undefined {
-  if (!s) return undefined
-  const items = s
-    .split(/\r?\n/)
-    .map((l) => l.replace(/^[-*]\s+/, '').trim())
-    .filter(Boolean)
-  return items.length ? items : undefined
-}
-
-export function parseQuestionFile(file: string, raw: string): Question {
-  const fm = matter(raw)
-  const data = fm.data as Record<string, unknown>
-  const sec = parseSections(fm.content)
-  const source = Array.isArray(data.source)
-    ? (data.source as unknown[]).map(String)
-    : data.source
-      ? [String(data.source)]
-      : []
+export function parseQuestionJson(file: string, raw: string): Question {
+  const d = JSON.parse(raw) as Partial<Question>
+  const source = Array.isArray(d.source) ? d.source.map(String) : d.source ? [String(d.source)] : []
   return {
-    id: String(data.id ?? path.basename(file, '.md')),
-    domain: String(data.domain ?? ''),
-    topic: String(data.topic ?? ''),
-    type: (data.type as QType) ?? 'free',
-    grade_scale: Number(data.grade_scale ?? 4),
+    id: String(d.id ?? path.basename(file, '.json')),
+    domain: String(d.domain ?? ''),
+    topic: String(d.topic ?? ''),
+    type: (d.type as QType) ?? 'free',
+    grade_scale: Number(d.grade_scale ?? 4),
     source,
-    created: String(data.created ?? ''),
-    q: sec['q'] ?? '',
-    choices: parseChoices(sec['choices']),
-    answer: sec['a'] ?? '',
-    explanation: sec['explanation'] ?? '',
-    speak: data.speak ? String(data.speak) : sec['speak'] || undefined,
+    created: String(d.created ?? ''),
+    q: d.q ?? '',
+    choices: Array.isArray(d.choices) ? d.choices.map(String) : undefined,
+    answer: d.answer ?? '',
+    explanation: d.explanation ?? '',
+    hint: d.hint ?? undefined,
+    speak: d.speak ?? undefined,
     file
   }
 }
@@ -78,10 +43,10 @@ export async function listQuestions(root: string, domain: string): Promise<Quest
   }
   const out: Question[] = []
   for (const name of entries) {
-    if (!name.endsWith('.md')) continue
+    if (!name.endsWith('.json')) continue
     const file = path.join(dir, name)
     try {
-      out.push(parseQuestionFile(file, await fs.readFile(file, 'utf8')))
+      out.push(parseQuestionJson(file, await fs.readFile(file, 'utf8')))
     } catch {
       // skip malformed file
     }

@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PickedQuestion } from '../../engine/types'
+import { review, todayISO } from '../../engine/srs'
 import { api } from './api'
 
-export const GRADES = [
+const intervalLabel = (days: number): string => (days <= 0 ? '今日' : `${days}日`)
+
+const GRADES = [
   { g: 1, label: 'Again', jp: 'もう一度', cls: 'again' },
   { g: 2, label: 'Hard', jp: '難しい', cls: 'hard' },
   { g: 3, label: 'Good', jp: '普通', cls: 'good' },
   { g: 4, label: 'Easy', jp: '簡単', cls: 'easy' }
 ] as const
-
-const gradeLabel = (g: number): string => {
-  const f = GRADES.find((x) => x.g === g)
-  return f ? `${f.label} / ${f.jp}` : String(g)
-}
 
 const isChoiceType = (t: string): boolean => t === 'single_choice' || t === 'multi'
 const letterOf = (choice: string): string => {
@@ -24,6 +22,8 @@ const correctLetters = (answer: string): string[] =>
     .split(/[,\s/]+/)
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean)
+
+const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
 interface Props {
   domain: string
@@ -40,12 +40,18 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
   const [selection, setSelection] = useState<string[]>([])
   const [text, setText] = useState('')
   const [recording, setRecording] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [hintText, setHintText] = useState<string | null>(null)
+  const [hintLoading, setHintLoading] = useState(false)
+  const [dive, setDive] = useState<string | null>(null)
+  const [diveLoading, setDiveLoading] = useState(false)
 
   const q = questions[index]
   const choice = isChoiceType(q.type)
   const correct = useMemo(() => correctLetters(q.answer), [q.answer])
-  const hasSpeak = Boolean(q.speak) || domain.startsWith('english')
+
+  const speakInPrompt =
+    Boolean(q.speak) && norm(q.speak ?? '').length > 8 && norm(q.q).includes(norm(q.speak ?? ''))
+  const canSpeak = Boolean(q.speak) && (speakInPrompt || revealed)
 
   const isCorrect = choice
     ? selection.length === correct.length && correct.every((c) => selection.includes(c))
@@ -53,19 +59,17 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
   const suggested = choice ? (isCorrect ? 3 : 1) : 3
 
   const speakNow = useCallback(() => {
-    const t = q.speak || q.q
-    if (t) void api.speak(t, voice, rate)
+    if (q.speak) void api.speak(q.speak, voice, rate)
   }, [q, voice, rate])
 
-  // reset per question; auto-speak English prompts on appearance
   useEffect(() => {
     setRevealed(false)
     setSelection([])
     setText('')
-    // Auto-read only when there is an explicit English line, so the English
-    // voice never tries to pronounce Japanese prompt text.
-    if (q.speak) void api.speak(q.speak, voice, rate)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setHintText(null)
+    setHintLoading(false)
+    setDive(null)
+    setDiveLoading(false)
   }, [index])
 
   const reveal = useCallback(() => setRevealed(true), [])
@@ -76,8 +80,8 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
       setRecording(true)
       try {
         await api.grade(domain, sessionId, q.id, g)
-      } catch (e) {
-        setToast(`記録に失敗: ${String(e)}`)
+      } catch {
+        /* recorded later */
       }
       setRecording(false)
       if (index + 1 >= questions.length) onDone()
@@ -86,7 +90,6 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     [recording, domain, sessionId, q.id, index, questions.length, onDone]
   )
 
-  // keyboard: Enter reveals; 1-4 grades after reveal
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
       const tag = (e.target as HTMLElement)?.tagName
@@ -97,10 +100,21 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
         }
         return
       }
-      if (!revealed && e.key === 'Enter') {
-        e.preventDefault()
-        reveal()
-      } else if (revealed && ['1', '2', '3', '4'].includes(e.key)) {
+      if (!revealed) {
+        if (q.type === 'single_choice') {
+          const k = e.key.toUpperCase()
+          if ((q.choices ?? []).some((c) => letterOf(c) === k)) {
+            e.preventDefault()
+            setSelection([k])
+            setRevealed(true)
+            return
+          }
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          reveal()
+        }
+      } else if (['1', '2', '3', '4'].includes(e.key)) {
         e.preventDefault()
         void onGrade(Number(e.key))
       }
@@ -109,32 +123,68 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     return () => window.removeEventListener('keydown', h)
   }, [revealed, reveal, onGrade])
 
-  const toggleChoice = (letter: string): void => {
+  // Quizlet-style: clicking a single_choice option commits + reveals instantly.
+  // multi keeps toggle-then-確定 (you pick several first).
+  const pickChoice = (letter: string): void => {
     if (revealed) return
-    if (q.type === 'single_choice') setSelection([letter])
-    else setSelection((s) => (s.includes(letter) ? s.filter((x) => x !== letter) : [...s, letter]))
+    if (q.type === 'single_choice') {
+      setSelection([letter])
+      setRevealed(true)
+    } else {
+      setSelection((s) => (s.includes(letter) ? s.filter((x) => x !== letter) : [...s, letter]))
+    }
   }
 
-  const deepDive = async (): Promise<void> => {
-    const prompt = await api.deepDivePrompt({
-      id: q.id,
-      file: q.file,
-      domain,
-      q: q.q,
-      answer: q.answer,
-      userAnswer: choice ? selection.join(',') : text,
-      gradeLabel: revealed ? gradeLabel(suggested) : undefined
-    })
-    try {
-      await navigator.clipboard.writeText(prompt)
-      setToast('深掘りプロンプトをコピー。Claude Code チャットに貼り付けて。')
-    } catch {
-      setToast('コピーに失敗しました。')
+  // Hint: stored hint is instant; otherwise ask Claude (fast model), no answer.
+  const onHint = async (): Promise<void> => {
+    if (hintText) {
+      setHintText(null)
+      return
     }
-    setTimeout(() => setToast(null), 4000)
+    if (q.hint) {
+      setHintText(q.hint)
+      return
+    }
+    setHintLoading(true)
+    const r = await api.claudeAsk(
+      `次の学習問題のヒントを1つだけ、答えそのものは言わず、日本語で簡潔に出して。\n問題: ${q.q}`,
+      'haiku'
+    )
+    setHintLoading(false)
+    setHintText(r.ok ? (r.text ?? '') : `取得失敗: ${r.error ?? ''}`)
+  }
+
+  // Deep dive: ask Claude for understanding-oriented explanation, shown in-app.
+  const deepDive = async (): Promise<void> => {
+    if (dive || diveLoading) {
+      setDive(null)
+      return
+    }
+    const userAns = choice ? selection.join(',') : text
+    setDiveLoading(true)
+    const r = await api.claudeAsk(
+      [
+        'あなたは学習コーチです。次の問題について、関連知識・つまずきやすい点・覚え方の観点で、日本語でわかりやすく深掘り解説してください。丸暗記ではなく理解を促す方針で。',
+        `ドメイン: ${domain}`,
+        `問題: ${q.q}`,
+        `模範解答: ${q.answer}`,
+        userAns ? `私の回答: ${userAns}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      'sonnet'
+    )
+    setDiveLoading(false)
+    setDive(r.ok ? (r.text ?? '') : `取得失敗: ${r.error ?? ''}`)
   }
 
   const canReveal = choice ? selection.length > 0 : true
+
+  const speakControl = canSpeak && (
+    <button className="icon speak-read" title="英語を読み上げ" onClick={speakNow}>
+      🔊
+    </button>
+  )
 
   return (
     <div className="session">
@@ -156,11 +206,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
           <span className="pill ghost">{q.topic}</span>
           <span className="pill ghost">{q.type}</span>
           {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
-          {hasSpeak && (
-            <button className="icon" title="読み上げ" onClick={speakNow}>
-              🔊
-            </button>
-          )}
+          {speakControl}
         </div>
 
         <h2 className="q">{q.q}</h2>
@@ -174,7 +220,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
               const state = revealed ? (right ? 'right' : picked ? 'wrong' : '') : picked ? 'picked' : ''
               return (
                 <li key={c}>
-                  <button className={`choice ${state}`} onClick={() => toggleChoice(L)} disabled={revealed}>
+                  <button className={`choice ${state}`} onClick={() => pickChoice(L)} disabled={revealed}>
                     {c}
                     {revealed && right && ' ✓'}
                     {revealed && picked && !right && ' ✗'}
@@ -193,13 +239,24 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
           />
         )}
 
+        {(hintLoading || hintText) && (
+          <div className="hint-box">💡 {hintLoading ? '…考え中' : hintText}</div>
+        )}
+
         {!revealed ? (
           <div className="actions">
-            <button className="primary" onClick={reveal} disabled={!canReveal}>
-              答え合わせ (Enter)
+            {q.type === 'single_choice' ? (
+              <span className="answer-hint">選択肢をクリック / A–D キーで回答</span>
+            ) : (
+              <button className="primary" onClick={reveal} disabled={!canReveal}>
+                答え合わせ {q.type === 'multi' ? '(複数選択→ここ)' : '(Enter)'}
+              </button>
+            )}
+            <button className="ghost-btn" onClick={onHint} disabled={hintLoading}>
+              💡 ヒント
             </button>
-            <button className="ghost-btn" onClick={deepDive}>
-              🤔 Claudeで深掘り
+            <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
+              🤔 深掘り
             </button>
           </div>
         ) : (
@@ -230,19 +287,25 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
                   <span className="gk">{gr.g}</span>
                   {gr.label}
                   <small>{gr.jp}</small>
+                  <span className="ivl">{intervalLabel(review(q.state, gr.g, todayISO()).interval)}</span>
                 </button>
               ))}
             </div>
             <div className="actions">
-              <button className="ghost-btn" onClick={deepDive}>
-                🤔 Claudeで深掘り
+              <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
+                🤔 深掘り
               </button>
             </div>
           </div>
         )}
-      </div>
 
-      {toast && <div className="toast">{toast}</div>}
+        {(diveLoading || dive) && (
+          <div className="dive-panel">
+            <div className="dive-head">🤔 深掘り{diveLoading ? ' …考え中' : ''}</div>
+            {dive && <div className="dive-body">{dive}</div>}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

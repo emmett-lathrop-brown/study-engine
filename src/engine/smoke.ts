@@ -40,11 +40,29 @@ async function main(): Promise<void> {
   await fs.mkdir(path.join(root, 'demo', 'set', 'logs'), { recursive: true })
 
   const mk = (id: string, topic: string, ans: string): string =>
-    `---\nid: ${id}\ndomain: demo/set\ntopic: ${topic}\ntype: single_choice\ngrade_scale: 4\nsource:\n  - https://example.com/${topic}\ncreated: ${today}\n---\n\n## Q\nQ for ${id}?\n\n## Choices\n- A. one\n- B. two\n\n## A\n${ans}\n\n## Explanation\nbecause.\n`
+    JSON.stringify(
+      {
+        id,
+        domain: 'demo/set',
+        topic,
+        type: 'single_choice',
+        grade_scale: 4,
+        source: [`https://example.com/${topic}`],
+        created: today,
+        q: `Q for ${id}?`,
+        choices: ['A. one', 'B. two'],
+        answer: ans,
+        explanation: 'because.',
+        hint: null,
+        speak: null
+      },
+      null,
+      2
+    )
 
-  await fs.writeFile(path.join(qdir, 'demo-set-a-0001.md'), mk('demo-set-a-0001', 'a', 'A'))
-  await fs.writeFile(path.join(qdir, 'demo-set-a-0002.md'), mk('demo-set-a-0002', 'a', 'B'))
-  await fs.writeFile(path.join(qdir, 'demo-set-b-0001.md'), mk('demo-set-b-0001', 'b', 'A'))
+  await fs.writeFile(path.join(qdir, 'demo-set-a-0001.json'), mk('demo-set-a-0001', 'a', 'A'))
+  await fs.writeFile(path.join(qdir, 'demo-set-a-0002.json'), mk('demo-set-a-0002', 'a', 'B'))
+  await fs.writeFile(path.join(qdir, 'demo-set-b-0001.json'), mk('demo-set-b-0001', 'b', 'A'))
 
   // init state: all due today
   const state = await readState(root)

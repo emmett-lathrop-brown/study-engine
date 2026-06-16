@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { spawn } from 'child_process'
-import { existsSync, promises as fs } from 'fs'
+import { existsSync, promises as fs, readdirSync } from 'fs'
+import { homedir } from 'os'
 import { join } from 'path'
 import { domainInfo, gradeOne, pick, summary } from '../engine/session'
 import type { PickOptions } from '../engine/session'
@@ -118,6 +119,115 @@ function deepDivePrompt(a: DeepDiveArgs): string {
 }
 
 // ---------------------------------------------------------------------------
+// Claude Code integration (self-contained): the app shells out to the `claude`
+// CLI in headless print mode. Auth is shared with the user's existing Claude
+// Code login (macOS keychain); `setup-token` opens an OAuth URL when missing.
+// No API key / secret is ever stored by this app.
+// ---------------------------------------------------------------------------
+let claudeBinCache: string | null | undefined
+
+function resolveClaudeBin(): string | null {
+  if (claudeBinCache !== undefined) return claudeBinCache
+  const cands: string[] = []
+  if (process.env.CLAUDE_BIN) cands.push(process.env.CLAUDE_BIN)
+  // mise-managed node installs
+  try {
+    const miseNode = join(homedir(), '.local/share/mise/installs/node')
+    for (const v of readdirSync(miseNode)) cands.push(join(miseNode, v, 'bin/claude'))
+  } catch {
+    /* no mise */
+  }
+  cands.push(
+    join(homedir(), '.claude/local/claude'),
+    join(homedir(), '.local/bin/claude'),
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude'
+  )
+  claudeBinCache = cands.find((c) => existsSync(c)) ?? null
+  return claudeBinCache
+}
+
+interface AskResult {
+  ok: boolean
+  text?: string
+  error?: string
+}
+
+function claudeAsk(prompt: string, model?: string): Promise<AskResult> {
+  const bin = resolveClaudeBin()
+  if (!bin) return Promise.resolve({ ok: false, error: 'claude CLI が見つかりません(未導入)。' })
+  return new Promise((resolve) => {
+    const args = ['-p', '--output-format', 'json', '--max-turns', '1']
+    if (model) args.push('--model', model)
+    const child = spawn(bin, args, { cwd: app.getPath('temp') })
+    let out = ''
+    let err = ''
+    child.stdout.on('data', (d) => (out += d))
+    child.stderr.on('data', (d) => (err += d))
+    child.on('error', (e) => resolve({ ok: false, error: String(e) }))
+    child.on('close', () => {
+      try {
+        const j = JSON.parse(out) as {
+          is_error?: boolean
+          api_error_status?: string | null
+          result?: string
+        }
+        if (j.is_error || j.api_error_status) {
+          resolve({ ok: false, error: j.result || j.api_error_status || 'Claude エラー' })
+        } else {
+          resolve({ ok: true, text: (j.result ?? '').trim() })
+        }
+      } catch {
+        resolve({ ok: false, error: (err || out || 'claude の応答を解析できませんでした').slice(0, 300) })
+      }
+    })
+    child.stdin.write(prompt)
+    child.stdin.end()
+  })
+}
+
+interface ClaudeStatus {
+  installed: boolean
+  connected: boolean
+  detail: string
+}
+
+async function claudeStatus(): Promise<ClaudeStatus> {
+  const bin = resolveClaudeBin()
+  if (!bin) {
+    return { installed: false, connected: false, detail: 'claude CLI 未導入(npm i -g @anthropic-ai/claude-code)' }
+  }
+  const r = await claudeAsk('OK とだけ返して', 'haiku')
+  return r.ok
+    ? { installed: true, connected: true, detail: '連携完了(既存ログインを共有)' }
+    : { installed: true, connected: false, detail: r.error ?? '未接続' }
+}
+
+// VSCode-style: open the OAuth URL that `claude setup-token` prints.
+function claudeLogin(win: BrowserWindow | null): Promise<{ ok: boolean; detail: string }> {
+  const bin = resolveClaudeBin()
+  if (!bin) return Promise.resolve({ ok: false, detail: 'claude CLI 未導入' })
+  return new Promise((resolve) => {
+    const child = spawn(bin, ['setup-token'], { cwd: app.getPath('temp') })
+    let opened = false
+    let buf = ''
+    const scan = (chunk: string): void => {
+      buf += chunk
+      const m = buf.match(/https?:\/\/\S*(?:anthropic|claude)\S*/)
+      if (m && !opened) {
+        opened = true
+        shell.openExternal(m[0])
+        win?.webContents.send('claude:login-url', m[0])
+      }
+    }
+    child.stdout.on('data', (d) => scan(String(d)))
+    child.stderr.on('data', (d) => scan(String(d)))
+    child.on('error', (e) => resolve({ ok: false, detail: String(e) }))
+    child.on('close', (code) => resolve({ ok: code === 0, detail: code === 0 ? '連携完了' : 'ログイン未完了' }))
+  })
+}
+
+// ---------------------------------------------------------------------------
 // IPC
 // ---------------------------------------------------------------------------
 function registerIpc(): void {
@@ -163,6 +273,10 @@ function registerIpc(): void {
   ipcMain.handle('git:commit', (_e, message: string) => commit(message))
   ipcMain.handle('deepdive:prompt', (_e, a: DeepDiveArgs) => deepDivePrompt(a))
   ipcMain.handle('open:external', (_e, url: string) => shell.openExternal(url))
+
+  ipcMain.handle('claude:status', () => claudeStatus())
+  ipcMain.handle('claude:ask', (_e, prompt: string, model?: string) => claudeAsk(prompt, model))
+  ipcMain.handle('claude:login', () => claudeLogin(BrowserWindow.getAllWindows()[0] ?? null))
 }
 
 // ---------------------------------------------------------------------------

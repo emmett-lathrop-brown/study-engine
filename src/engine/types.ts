@@ -15,6 +15,7 @@ export interface Question {
   choices?: string[] // present for single_choice / multi
   answer: string // letter(s) for choices; model answer otherwise
   explanation: string
+  hint?: string // optional hint, shown on demand (not inline in the question)
   speak?: string // English text to read aloud (TTS); undefined for non-English
   file: string // absolute path on disk
 }
