@@ -43,4 +43,9 @@ pnpm dev         # アプリ起動
 - アルゴリズムの差し替え(FSRS 等): `src/engine/srs.ts` の `review()` を置換。履歴から再計算できる設計。
 - エンジン検証: `pnpm smoke`。型: `pnpm typecheck`。
 
+## トラブルシュート(Electron)
+
+- 起動時に `Cannot read properties of undefined (reading 'whenReady')` → 環境変数 `ELECTRON_RUN_AS_NODE=1` が残っている(VSCode等のElectronホスト由来)。`dev`/`preview` スクリプトは自前で空にして回避済み。手動起動時は `env -u ELECTRON_RUN_AS_NODE ...`。
+- `Library not loaded: Electron Framework` / `Electron failed to install correctly` → pnpm 環境で electron の展開が途中で止まり `dist/` がスタブ + `path.txt` 欠落になる既知事象。`postinstall`(`scripts/fix-electron.mjs`)がキャッシュ済み zip から再展開し `path.txt` を補完して自己修復する。直らなければ `pnpm rebuild electron`。
+
 設計の詳細・常設ルールは [`CLAUDE.md`](./CLAUDE.md)。
