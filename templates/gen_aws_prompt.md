@@ -1,7 +1,7 @@
 # AWS 問題 生成プロンプト雛形
 
 > 使い方: `{TOPIC}` をトピック(例「Amazon S3 / 耐久性・ストレージクラス」)に置き換え、Claude Code に渡す。
-> 生成物は `templates/question.json` のスキーマ(`schema/question.schema.json` が正本)に従い、**1 問 1 ファイルの JSON** として `study-log/aws/<exam>/questions/<topic>-NN.json` に保存する。
+> 生成物は `templates/question.json` のスキーマ(`schema/question.schema.json` が正本)に従い、**1 問 1 ファイルの JSON** として `study-log/subjects/aws/<exam>/questions/<topic>-NN.json` に保存する。
 
 あなたは AWS 認定 クラウドプラクティショナー(CLF-C02)レベルの良問を作る出題者です。
 トピック: **{TOPIC}**

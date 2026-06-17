@@ -45,6 +45,7 @@ export interface StudyApi {
   pickSession(domain: string, opts: PickOptions): Promise<PickedQuestion[]>
   grade(domain: string, session: string, id: string, grade: number): Promise<{ id: string; state: SrsState }>
   summary(domain: string, session: string): Promise<SessionSummary>
+  genPrompt(domain: string): Promise<string>
   speak(text: string, voice?: string, rate?: number): Promise<void>
   stopSpeak(): Promise<void>
   commit(message: string): Promise<{ ok: boolean; out: string }>

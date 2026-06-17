@@ -13,6 +13,14 @@ export function domainPrefix(domain: string): string {
   return domain.replace(/\//g, '-') + '-'
 }
 
+// All study domains live under <root>/subjects/<a>/<b> (questions/logs/learned/
+// chats/export); only srs/state.json sits at the root. domainDir() centralizes
+// that layout so no caller hardcodes the `subjects/` segment.
+export const SUBJECTS_DIR = 'subjects'
+export function domainDir(root: string, domain: string): string {
+  return path.join(root, SUBJECTS_DIR, domain)
+}
+
 export function parseQuestionJson(file: string, raw: string): Question {
   const d = JSON.parse(raw) as Partial<Question>
   const source = Array.isArray(d.source) ? d.source.map(String) : d.source ? [String(d.source)] : []
@@ -43,7 +51,7 @@ export function parseQuestionJson(file: string, raw: string): Question {
 }
 
 export async function listQuestions(root: string, domain: string): Promise<Question[]> {
-  const dir = path.join(root, domain, 'questions')
+  const dir = path.join(domainDir(root, domain), 'questions')
   let entries: string[] = []
   try {
     entries = await fs.readdir(dir)
@@ -64,21 +72,22 @@ export async function listQuestions(root: string, domain: string): Promise<Quest
   return out
 }
 
-/** Walk <root>/<a>/<b> and keep the domains whose dir satisfies `hasMarker`. */
+/** Walk <root>/subjects/<a>/<b> and keep the domains whose dir satisfies `hasMarker`. */
 async function discoverDomains(
   root: string,
-  hasMarker: (domainDir: string) => boolean
+  hasMarker: (dir: string) => boolean
 ): Promise<string[]> {
+  const base = path.join(root, SUBJECTS_DIR)
   const out: string[] = []
   let level1: string[] = []
   try {
-    level1 = await fs.readdir(root)
+    level1 = await fs.readdir(base)
   } catch {
-    return []
+    return [] // no subjects/ dir yet
   }
   for (const a of level1) {
-    if (a.startsWith('.') || a === 'srs') continue
-    const aPath = path.join(root, a)
+    if (a.startsWith('.')) continue
+    const aPath = path.join(base, a)
     let level2: string[] = []
     try {
       if (!(await fs.stat(aPath)).isDirectory()) continue
@@ -134,7 +143,7 @@ export async function writeState(root: string, state: StateMap): Promise<void> {
 }
 
 export async function appendReview(root: string, domain: string, r: Review): Promise<void> {
-  const p = path.join(root, domain, 'logs', 'reviews.jsonl')
+  const p = path.join(domainDir(root, domain), 'logs', 'reviews.jsonl')
   await fs.mkdir(path.dirname(p), { recursive: true })
   await fs.appendFile(p, JSON.stringify(r) + '\n', 'utf8')
 }
@@ -146,7 +155,7 @@ export const safeBase = (id: string): string => id.replace(/[^\p{L}\p{N}._-]/gu,
 
 // --- per-question chat transcripts -----------------------------------------
 function chatPath(root: string, domain: string, id: string): string {
-  const p = path.join(root, domain, 'chats', `${safeBase(id)}.json`)
+  const p = path.join(domainDir(root, domain), 'chats', `${safeBase(id)}.json`)
   // Defense-in-depth: even with safeBase on the id, a crafted `domain` (e.g.
   // carrying '..' segments) must not let the path resolve outside the root.
   if (path.relative(root, p).split(path.sep)[0] === '..') {
@@ -201,7 +210,7 @@ export async function writeChat(
 }
 
 export async function readReviews(root: string, domain: string): Promise<Review[]> {
-  const p = path.join(root, domain, 'logs', 'reviews.jsonl')
+  const p = path.join(domainDir(root, domain), 'logs', 'reviews.jsonl')
   let raw = ''
   try {
     raw = await fs.readFile(p, 'utf8')

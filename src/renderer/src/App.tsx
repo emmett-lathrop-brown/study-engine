@@ -30,6 +30,8 @@ export default function App(): JSX.Element {
   const [preparing, setPreparing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportMsg, setExportMsg] = useState<string | null>(null)
+  const [genMsg, setGenMsg] = useState<string | null>(null)
+  const [genningDomain, setGenningDomain] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [claude, setClaude] = useState<ClaudeStatus | null>(null)
   const [claudeBusy, setClaudeBusy] = useState(false)
@@ -138,6 +140,23 @@ export default function App(): JSX.Element {
       setExportMsg(`書き出し失敗: ${String(e)}`)
     }
     setExporting(false)
+  }
+
+  // Build a question-generation prompt for this domain (CONTEXT + schema + gaps)
+  // and copy it to the clipboard, to paste into a real Claude Code session — the
+  // in-app chat is sandboxed and can't write files (CLAUDE.md §5/§7).
+  const genQuestions = async (domain: string): Promise<void> => {
+    setGenningDomain(domain)
+    setGenMsg(null)
+    try {
+      await api.copyToClipboard(await api.genPrompt(domain))
+      setGenMsg(
+        `「${domain}」の生成プロンプトをコピーしました。Claude Code（study-log を開いたセッション）に貼り付けて問題を生成 → レビューしてコミットしてください。`
+      )
+    } catch (e) {
+      setGenMsg(`生成プロンプトの取得に失敗: ${String(e)}`)
+    }
+    setGenningDomain(null)
   }
 
   // Persistent top bar (same position on every page): title + voice/speed.
@@ -308,6 +327,7 @@ export default function App(): JSX.Element {
         </div>
 
         {error && <div className="error">{error}</div>}
+        {genMsg && <div className="gen-note">{genMsg}</div>}
         {preparing && <div className="prep-note">速習の選択肢を生成中…</div>}
 
         {domains.length === 0 ? (
@@ -318,32 +338,42 @@ export default function App(): JSX.Element {
               const m = stats?.maturity.find((x) => x.domain === d.domain)
               const pct = (n: number): string => (m && m.total ? `${(n / m.total) * 100}%` : '0%')
               return (
-                <button key={d.domain} className="domain-card" onClick={() => void start(d.domain)} disabled={busy}>
-                  <div className="dname">{d.domain}</div>
-                  <div className="dcounts">
-                    <span className="due">復習 {d.due}</span>
-                    <span className="new">新規 {d.new}</span>
-                    <span className="total">計 {d.total}</span>
-                  </div>
-                  {m && m.total > 0 && (
-                    <div className="maturity">
-                      <div className="mat-bar">
-                        <span className="mat mature" style={{ width: pct(m.mature) }} />
-                        <span className="mat learning" style={{ width: pct(m.learning) }} />
-                        <span className="mat unseen" style={{ width: pct(m.unseen) }} />
-                      </div>
-                      <div className="mat-legend">
-                        習得 {m.mature} ・ 学習中 {m.learning} ・ 未 {m.unseen}
-                        {m.leeches > 0 && (
-                          <span className="leech-flag" title={`苦手カード（${LEECH_LAPSES}回以上ミス）`}>
-                            {' '}・ 🐌 {m.leeches}
-                          </span>
-                        )}
-                      </div>
+                <div key={d.domain} className="domain-cell">
+                  <button className="domain-card" onClick={() => void start(d.domain)} disabled={busy}>
+                    <div className="dname">{d.domain}</div>
+                    <div className="dcounts">
+                      <span className="due">復習 {d.due}</span>
+                      <span className="new">新規 {d.new}</span>
+                      <span className="total">計 {d.total}</span>
                     </div>
-                  )}
-                  <div className="go">{learnMode ? '速習で開始 →' : 'セッション開始 →'}</div>
-                </button>
+                    {m && m.total > 0 && (
+                      <div className="maturity">
+                        <div className="mat-bar">
+                          <span className="mat mature" style={{ width: pct(m.mature) }} />
+                          <span className="mat learning" style={{ width: pct(m.learning) }} />
+                          <span className="mat unseen" style={{ width: pct(m.unseen) }} />
+                        </div>
+                        <div className="mat-legend">
+                          習得 {m.mature} ・ 学習中 {m.learning} ・ 未 {m.unseen}
+                          {m.leeches > 0 && (
+                            <span className="leech-flag" title={`苦手カード（${LEECH_LAPSES}回以上ミス）`}>
+                              {' '}・ 🐌 {m.leeches}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <div className="go">{learnMode ? '速習で開始 →' : 'セッション開始 →'}</div>
+                  </button>
+                  <button
+                    className="ghost-btn sm gen-btn"
+                    onClick={() => void genQuestions(d.domain)}
+                    disabled={busy || genningDomain !== null}
+                    title="Claude Code 用の生成プロンプトをコピー（CONTEXT＋スキーマ＋既存ギャップ入り）"
+                  >
+                    {genningDomain === d.domain ? 'コピー中…' : '📝 問題を作る by Claude Code'}
+                  </button>
+                </div>
               )
             })}
           </div>

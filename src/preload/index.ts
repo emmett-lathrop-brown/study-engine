@@ -48,6 +48,7 @@ const api = {
   commit: (message: string): Promise<{ ok: boolean; out: string }> =>
     ipcRenderer.invoke('git:commit', message),
   exportMarkdown: (): Promise<ExportResult[]> => ipcRenderer.invoke('export:md'),
+  genPrompt: (domain: string): Promise<string> => ipcRenderer.invoke('gen:prompt', domain),
   getChat: (domain: string, id: string): Promise<ChatLog | null> =>
     ipcRenderer.invoke('chat:get', domain, id),
   saveChat: (domain: string, id: string, messages: ChatMessage[]): Promise<void> =>

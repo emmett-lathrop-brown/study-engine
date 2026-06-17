@@ -6,6 +6,7 @@ import { join } from 'path'
 import { domainInfo, gradeOne, pick, studyStats, summary } from '../engine/session'
 import type { PickOptions } from '../engine/session'
 import { exportMarkdown } from '../engine/export'
+import { buildGenPrompt } from '../engine/gen'
 import { readChat, writeChat } from '../engine/store'
 import type { ChatMessage } from '../engine/types'
 
@@ -282,6 +283,7 @@ function registerIpc(): void {
     }
   })
   ipcMain.handle('export:md', () => exportMarkdown(requireRoot()))
+  ipcMain.handle('gen:prompt', (_e, domain: string) => buildGenPrompt(requireRoot(), domain))
   ipcMain.handle('chat:get', (_e, domain: string, id: string) => readChat(requireRoot(), domain, id))
   ipcMain.handle('chat:save', (_e, domain: string, id: string, messages: ChatMessage[]) =>
     writeChat(requireRoot(), domain, id, messages)

@@ -1,7 +1,7 @@
 # 英語 問題 生成プロンプト雛形
 
 > 使い方: `{TOPIC}` を文法/語彙トピック(例「現在完了(継続・経験・完了)」)に置き換え、Claude Code に渡す。
-> 生成物は `templates/question.json` のスキーマ(`schema/question.schema.json` が正本)に従い、**1 問 1 ファイルの JSON** として `study-log/english/<set>/questions/NNNN.json` に保存する。
+> 生成物は `templates/question.json` のスキーマ(`schema/question.schema.json` が正本)に従い、**1 問 1 ファイルの JSON** として `study-log/subjects/english/<set>/questions/NNNN.json` に保存する。
 
 あなたは中学〜高校レベルの英語教材を作る出題者です。
 トピック: **{TOPIC}**

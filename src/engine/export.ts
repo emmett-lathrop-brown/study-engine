@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import * as path from 'path'
 import type { ChatLog, ExportResult, Question } from './types'
-import { listDomains, listQuestions, readChat, safeBase } from './store'
+import { domainDir, listDomains, listQuestions, readChat, safeBase } from './store'
 
 // Obsidian-friendly Markdown export of the questions. The JSON under
 // questions/ stays the source of truth; this writes a sibling export/ folder
@@ -67,7 +67,7 @@ export async function exportMarkdown(root: string): Promise<ExportResult[]> {
   for (const domain of await listDomains(root)) {
     const qs = await listQuestions(root, domain)
     if (qs.length === 0) continue // no questions → don't scaffold an empty export/ dir
-    const dir = path.join(root, domain, 'export')
+    const dir = path.join(domainDir(root, domain), 'export')
     await fs.mkdir(dir, { recursive: true })
 
     const expected = new Set(qs.map((q) => `${safeBase(q.id)}.md`))

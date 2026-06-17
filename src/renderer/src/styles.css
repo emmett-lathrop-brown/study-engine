@@ -293,6 +293,33 @@ h1 {
 .domain-card:disabled:hover {
   border-color: var(--line);
 }
+.domain-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.domain-cell > .domain-card {
+  width: 100%;
+}
+.gen-btn {
+  align-self: stretch;
+  font-size: 12px;
+  padding: 8px 12px;
+  color: var(--muted);
+}
+.gen-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.gen-note {
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
 .dname {
   font-size: 17px;
   font-weight: 700;

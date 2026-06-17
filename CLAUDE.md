@@ -22,13 +22,16 @@ Claude Code が**出題・採点・SM-2・問題生成・知識育成**を担う
 
 ```
 study-log/                       # private
-  <domain-a>/<domain-b>/         # 例: aws/clf, english/core
+  subjects/<domain-a>/<domain-b>/  # 例: subjects/aws/clf, subjects/english/core
     questions/  *.json           # 1問1ファイル(構造化 JSON オブジェクト)
     learned/    *.md             # 第2の脳(人が肉付けする散文だけ md)
     logs/       reviews.jsonl    # 回答履歴(追記型 JSON Lines)
     chats/      <id>.json        # 問題ごとの Claude チャット履歴(アプリ内チャット。md書き出しに同梱)
+    CONTEXT.md                   # Claude Code 用ドメイン文脈(問題生成の前に読む。§5)
   srs/state.json                 # 全問の SM-2 状態(ID基準・グローバル)
 ```
+
+> ドメインデータは **`subjects/` 配下**に集約(`srs/` だけ root)。`domain` 文字列・ID・`state.json` のキーは `subjects/` を含まない(`aws/clf` のまま)。エンジンは `src/engine/store.ts` の `domainDir()`(=`<root>/subjects/<domain>`)経由で必ずアクセスし、`subjects/` を直書きしない。
 
 ## 2. 問題ファイル仕様(1問1JSON)
 
@@ -71,10 +74,12 @@ study-log/                       # private
 
 **ネットから問題を「収集」しない。一次情報を根拠に「生成」してストックする(逐次生成)。**
 
+- **各ドメインに `CONTEXT.md`(必須ルール)**: `subjects/<domain>/CONTEXT.md` に、そのドメインの範囲・レベル・出題スタイル・一次情報源・ID規約・**現在のカバレッジ(既存トピック)とギャップ**を書く。**問題生成の前に必ずこの CONTEXT.md を読む**(一貫した粒度・重複回避・出典方針のため)。`aws/clf`・`english/core` の既存 `CONTEXT.md` が見本。
+- **生成の起点**: アプリ ダッシュボードの「📝 問題を作る」ボタンが、`CONTEXT.md` + スキーマ(§2)+ ID規約 + **既存ID/トピックのギャップ**を1つの生成プロンプトに同梱してクリップボードへ出す → それを **実 Claude Code(チャット)に貼って生成**(アプリ内チャットは sandboxed でファイルを書けない=§7)。生成された `questions/*.json` は人がレビューしてからコミット。
 - **AWS**: 公式ドキュメント+公開サンプルを**根拠**にオリジナル生成。丸写し禁止、出典URL併記。市販テキストは地図としてのみ。
-- **英語**: 中学〜高校の確立範囲で文法・語彙・例文を生成。`## Speak` に読み上げ英文。
-- **逐次生成**: まず各対象 20〜30 問で開始、足りなければトピックを足す。
-- プロンプト雛形: `templates/gen_aws_prompt.md` / `gen_english_prompt.md` / `gen_domain_prompt.md`。
+- **英語**: 中学〜高校の確立範囲で文法・語彙・例文を生成。`speak` に読み上げ英文、英語回答に `answer_ruby`。
+- **逐次生成**: まず各対象 20〜30 問で開始、足りなければ CONTEXT.md のギャップに沿ってトピックを足す。
+- プロンプト雛形: `templates/gen_aws_prompt.md` / `gen_english_prompt.md` / `gen_domain_prompt.md`(保存先は `study-log/subjects/<domain>/questions/`)。
 
 ## 6. `learned/`(第2の脳)の運用
 
@@ -96,12 +101,13 @@ study-log/                       # private
 
 エンジンは**完全にドメイン汎用**。新しい学習対象はデータを置くだけで増える。
 
-1. `study-log/<a>/<b>/{questions,learned,logs}` を作る(例 `aws/saa`, `chinese/hsk1`, `it/fe`)。
-2. `templates/gen_domain_prompt.md` を使って 20〜30 問を**生成**(出典付き・丸写し禁止)。`templates/question.json` 形式の JSON で `questions/` に保存(1問1 `.json`)。ID は一意に。
-3. `srs/state.json` に各 ID を `{"interval":0,"ease":2.5,"due":"<今日>","reps":0,"lapses":0}` で追加(全問 due=今日)。
-4. 空の `logs/reviews.jsonl` を作る。
-5. アプリを再読み込み → ダッシュボードに新ドメインが自動表示。
-6. 言語学習なら `say` の声を対象言語に(設定の声: 中国語 Tingting、仏語 Thomas、独語 Anna 等)。`## Speak` に対象言語テキストを入れる。
+1. `study-log/subjects/<a>/<b>/{questions,learned,logs}` を作る(例 `subjects/aws/saa`, `subjects/chinese/hsk1`, `subjects/it/fe`)。
+2. `subjects/<a>/<b>/CONTEXT.md` を作る(範囲・レベル・出題スタイル・一次情報源・ID規約・カバレッジ/ギャップ。§5。`aws/clf` の CONTEXT.md が見本)。
+3. `templates/gen_domain_prompt.md` を使い、CONTEXT.md を読ませて 20〜30 問を**生成**(出典付き・丸写し禁止)。`templates/question.json` 形式の JSON で `questions/` に保存(1問1 `.json`)。ID は一意に。
+4. `srs/state.json` に各 ID を `{"interval":0,"ease":2.5,"due":"<今日>","reps":0,"lapses":0}` で追加(全問 due=今日)。
+5. 空の `logs/reviews.jsonl` を作る。
+6. アプリを再読み込み → ダッシュボードに新ドメインが自動表示。
+7. 言語学習なら `say` の声を対象言語に(設定の声: 中国語 Tingting、仏語 Thomas、独語 Anna 等)。`speak` に対象言語テキストを入れ、英語等は `answer_ruby` を付ける。
 
 > 既存の `aws/clf`・`english/core` がそのままお手本。最初は**小さく 1 セッション通す**ことを最優先。
 

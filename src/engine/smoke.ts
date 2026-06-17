@@ -80,9 +80,10 @@ async function main(): Promise<void> {
 
   // --- Full session round-trip -----------------------------------------
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'study-smoke-'))
-  const qdir = path.join(root, 'demo', 'set', 'questions')
+  const setDir = path.join(root, 'subjects', 'demo', 'set') // domains live under subjects/
+  const qdir = path.join(setDir, 'questions')
   await fs.mkdir(qdir, { recursive: true })
-  await fs.mkdir(path.join(root, 'demo', 'set', 'logs'), { recursive: true })
+  await fs.mkdir(path.join(setDir, 'logs'), { recursive: true })
 
   const mk = (id: string, topic: string, ans: string): string =>
     JSON.stringify(
@@ -154,7 +155,7 @@ async function main(): Promise<void> {
   const exported = await exportMarkdown(root)
   const ex = exported.find((e) => e.domain === 'demo/set')
   ok(!!ex && ex.count === 3, `exportMarkdown writes one md per question (got ${ex?.count})`)
-  const md = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  const md = await fs.readFile(path.join(setDir, 'export', 'demo-set-a-0001.md'), 'utf8')
   ok(md.startsWith('---') && md.includes('## 解答') && md.includes('tags: ['), 'exported md has frontmatter + answer section')
 
   // --- Leech soft-flag --------------------------------------------------
@@ -181,7 +182,7 @@ async function main(): Promise<void> {
   )
   ok((await readChat(root, 'demo/set', 'no-such-id')) === null, 'missing chat -> null')
   await exportMarkdown(root) // re-export now that a chat exists
-  const chatMd = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  const chatMd = await fs.readFile(path.join(setDir, 'export', 'demo-set-a-0001.md'), 'utf8')
   ok(
     chatMd.includes('## Claude チャット') && chatMd.includes('なぜ A が正解？'),
     'exported md embeds the chat transcript'
@@ -190,7 +191,7 @@ async function main(): Promise<void> {
   await writeChat(root, 'demo/set', 'demo-set-a-0001', [])
   ok((await readChat(root, 'demo/set', 'demo-set-a-0001')) === null, 'cleared chat removes the file')
   await exportMarkdown(root)
-  const clearedMd = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  const clearedMd = await fs.readFile(path.join(setDir, 'export', 'demo-set-a-0001.md'), 'utf8')
   ok(!clearedMd.includes('## Claude チャット'), 'no chat -> no chat section in exported md')
 
   // --- rebuild-state replay: state is a pure function of (live) history -------
