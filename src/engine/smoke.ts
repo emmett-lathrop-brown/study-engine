@@ -3,7 +3,16 @@
 import { promises as fs } from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { review, defaultState, todayISO, addDays } from './srs'
+import {
+  review,
+  defaultState,
+  todayISO,
+  addDays,
+  fuzzSeed,
+  EASE_MIN,
+  INTERVAL_MAX,
+  LEECH_LAPSES
+} from './srs'
 import { writeState, readState } from './store'
 import { pick, record, summary, domainInfo, studyStats } from './session'
 import { exportMarkdown } from './export'
@@ -31,8 +40,43 @@ async function main(): Promise<void> {
   ok(s.interval > before && s.ease > 2.5, `Easy grows interval & ease (got ${s.interval}, ease ${s.ease})`)
   const sLapse = review(s, 1, today) // Again -> reset
   ok(sLapse.reps === 0 && sLapse.lapses === 1 && sLapse.interval === 1, 'Again resets reps & lapses++')
-  ok(sLapse.ease >= 1.3, 'ease never below floor 1.3')
+  ok(sLapse.ease >= EASE_MIN, `ease never below floor ${EASE_MIN}`)
   ok(review(s, 3, today).due === addDays(today, review(s, 3, today).interval), 'due = today + interval')
+
+  // --- Robustification: ease-hell fix, fuzz, cap ------------------------
+  const matured = { interval: 10, ease: 2.5, due: today, reps: 3, lapses: 0 }
+  ok(review(matured, 2, today).ease === 2.5, 'Hard no longer lowers ease (ease-hell fix)')
+  ok(review(matured, 4, today).ease === 2.65, 'Easy still raises ease (+0.15)')
+  let floored = defaultState(today)
+  for (let i = 0; i < 12; i++) floored = review(floored, 1, today) // many Agains
+  ok(floored.ease === EASE_MIN, `repeated Again bottoms ease at EASE_MIN ${EASE_MIN} (got ${floored.ease})`)
+
+  const big = { interval: 100, ease: 2.5, due: today, reps: 5, lapses: 0 }
+  const base = Math.round(100 * 2.5) // 250, before fuzz/cap
+  ok(review(big, 3, today).interval === base, `no seed -> exact interval, no fuzz (got ${review(big, 3, today).interval})`)
+  const seed = fuzzSeed('demo-set-a-0001', today)
+  const f1 = review(big, 3, today, seed)
+  const f2 = review(big, 3, today, seed)
+  ok(f1.interval === f2.interval, `fuzz is deterministic per (id,day) seed (${f1.interval} === ${f2.interval})`)
+  ok(Math.abs(f1.interval - base) <= Math.max(1, Math.round(base * 0.05)), `fuzz stays within +/-5% band (base ${base}, got ${f1.interval})`)
+  const runaway = { interval: 300, ease: 2.5, due: today, reps: 5, lapses: 0 }
+  ok(review(runaway, 3, today).interval === INTERVAL_MAX, `interval capped at ${INTERVAL_MAX} (got ${review(runaway, 3, today).interval})`)
+  ok(fuzzSeed('a', today) === fuzzSeed('a', today) && fuzzSeed('a', today) !== fuzzSeed('b', today), 'fuzzSeed is stable per id and varies across ids')
+
+  // Graduating steps must NOT fuzz, even with a seed (only multiplied reps>=2 intervals do).
+  const grad = { interval: 6, ease: 2.5, due: today, reps: 1, lapses: 0 }
+  ok(review(grad, 4, today, fuzzSeed('x', today)).interval === 8, 'graduating step (reps1 Easy=8) stays exact under fuzz')
+  // Repeated Hard grows the interval and never shrinks it (ease-hell fix locked in).
+  let hs = { interval: 6, ease: 2.5, due: today, reps: 3, lapses: 0 }
+  let grew = true
+  for (let i = 0; i < 6; i++) {
+    const n = review(hs, 2, today)
+    grew = grew && n.interval >= hs.interval
+    hs = n
+  }
+  ok(grew && hs.interval > 6, `repeated Hard grows, never shrinks (6 -> ${hs.interval})`)
+  // A legacy card with ease below the new floor is rescued up to EASE_MIN on success.
+  ok(review({ interval: 10, ease: 1.4, due: today, reps: 3, lapses: 0 }, 3, today).ease === EASE_MIN, `legacy ease < ${EASE_MIN} rescued to floor on Good`)
 
   // --- Full session round-trip -----------------------------------------
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'study-smoke-'))
@@ -112,6 +156,18 @@ async function main(): Promise<void> {
   ok(!!ex && ex.count === 3, `exportMarkdown writes one md per question (got ${ex?.count})`)
   const md = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
   ok(md.startsWith('---') && md.includes('## 解答') && md.includes('tags: ['), 'exported md has frontmatter + answer section')
+
+  // --- Leech soft-flag --------------------------------------------------
+  const st2 = await readState(root)
+  st2['demo-set-b-0001'] = { interval: 5, ease: EASE_MIN, due: today, reps: 3, lapses: LEECH_LAPSES, last_review: today }
+  await writeState(root, st2)
+  const lstats = await studyStats(root)
+  const ldm = lstats.maturity.find((m) => m.domain === 'demo/set')
+  ok(!!ldm && ldm.leeches === 1, `leech flagged at ${LEECH_LAPSES} lapses (got ${ldm?.leeches})`)
+  const leechSess = `${today}-leech`
+  await record(root, 'demo/set', leechSess, [{ id: 'demo-set-b-0001', grade: 3 }])
+  const lsum = await summary(root, 'demo/set', leechSess)
+  ok(lsum.items[0]?.leech === true, 'summary item carries leech flag for chronically-missed card')
 
   await fs.rm(root, { recursive: true, force: true })
 

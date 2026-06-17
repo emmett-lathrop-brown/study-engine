@@ -254,6 +254,10 @@ h1 {
   color: var(--muted);
   margin-top: 5px;
 }
+.leech-flag {
+  color: var(--hard);
+  font-weight: 700;
+}
 .error {
   background: #3a1d22;
   border: 1px solid var(--again);
@@ -928,6 +932,11 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.rr-leech {
+  flex: none;
+  font-size: 13px;
+  line-height: 1;
 }
 .rr-topic {
   flex: none;

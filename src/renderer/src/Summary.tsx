@@ -71,6 +71,11 @@ export function Summary({ data, sessionId, onBack, onRetry }: Props): JSX.Elemen
                 <span className="rr-q" title={it.q}>
                   {it.q}
                 </span>
+                {it.leech && (
+                  <span className="rr-leech" title="苦手カード：何度もミスしています">
+                    🐌
+                  </span>
+                )}
                 <span className="rr-topic">{it.topic}</span>
                 <span className={`rr-grade ${m.cls}`}>{m.label}</span>
               </div>

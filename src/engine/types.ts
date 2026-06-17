@@ -69,6 +69,7 @@ export interface DomainMaturity {
   unseen: number // never reviewed (no last_review)
   learning: number // reviewed, interval < MATURE_DAYS
   mature: number // interval >= MATURE_DAYS
+  leeches: number // lapsed >= LEECH_LAPSES times (soft-flag; orthogonal to the buckets above)
 }
 
 export interface StudyStats {
@@ -85,6 +86,7 @@ export interface SessionItem {
   q: string
   grade: number // last grade given this session (1..4)
   correct: boolean // grade >= 3 (Good+), same rule as accuracy
+  leech: boolean // current lapses >= LEECH_LAPSES (a chronically-missed card)
 }
 
 export interface SessionSummary {

@@ -6,7 +6,15 @@ import type {
   SrsState,
   StudyStats
 } from './types'
-import { addDays, defaultState, nowISO, review as srsReview, todayISO } from './srs'
+import {
+  addDays,
+  defaultState,
+  fuzzSeed,
+  LEECH_LAPSES,
+  nowISO,
+  review as srsReview,
+  todayISO
+} from './srs'
 import {
   appendReview,
   domainPrefix,
@@ -108,14 +116,20 @@ export async function record(
   grades: GradeInput[],
   on?: string
 ): Promise<Array<{ id: string; state: SrsState }>> {
-  const day = on ?? todayISO()
+  // One clock read so the fuzz seed-day and the stored ts date can't disagree
+  // (no midnight race): on the live path day === ts.slice(0,10), so a replay that
+  // derives the day from ts reproduces the same fuzzed interval.
+  const now = new Date()
+  const day = on ?? todayISO(now)
+  const ts = nowISO(now)
   const state = await readState(root)
   const results: Array<{ id: string; state: SrsState }> = []
   for (const g of grades) {
     const prev = state[g.id] ?? defaultState(day)
-    const next = srsReview(prev, g.grade, day)
+    // Seed fuzz from (id, day); reproducible from the review's stored ts on replay.
+    const next = srsReview(prev, g.grade, day, fuzzSeed(g.id, day))
     state[g.id] = next
-    await appendReview(root, domain, { id: g.id, ts: nowISO(), grade: g.grade, session })
+    await appendReview(root, domain, { id: g.id, ts, grade: g.grade, session })
     results.push({ id: g.id, state: next })
   }
   await writeState(root, state)
@@ -174,13 +188,16 @@ export async function studyStats(root: string, on?: string): Promise<StudyStats>
     let unseen = 0
     let learning = 0
     let mature = 0
+    let leeches = 0
     for (const q of qs) {
       const st = state[q.id]
       if (!st || !st.last_review) unseen++
       else if (st.interval >= MATURE_DAYS) mature++
       else learning++
+      // Leech is orthogonal to the maturity bucket: a mature card can still be a leech.
+      if (st && st.lapses >= LEECH_LAPSES) leeches++
     }
-    maturity.push({ domain, total: qs.length, unseen, learning, mature })
+    maturity.push({ domain, total: qs.length, unseen, learning, mature, leeches })
   }
   // Streak: count back from today (or yesterday if today isn't done yet).
   let streak = 0
@@ -205,6 +222,7 @@ export async function summary(
 ): Promise<SessionSummary> {
   const reviews = (await readReviews(root, domain)).filter((r) => r.session === session)
   const questions = await listQuestions(root, domain)
+  const state = await readState(root)
   const qById = new Map(questions.map((q) => [q.id, q]))
   const byGrade: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }
   const wrongTopic = new Map<string, number>()
@@ -224,7 +242,8 @@ export async function summary(
       topic: q?.topic ?? '?',
       q: q?.q ?? r.id,
       grade: r.grade,
-      correct: r.grade >= 3
+      correct: r.grade >= 3,
+      leech: (state[r.id]?.lapses ?? 0) >= LEECH_LAPSES
     })
   }
   const total = reviews.length

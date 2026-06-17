@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DomainInfo, PickedQuestion, SessionSummary, StudyStats } from '../../engine/types'
+import { LEECH_LAPSES } from '../../engine/srs'
 import { api, Settings, VOICES, ClaudeStatus } from './api'
 import { Session } from './Session'
 import { Summary } from './Summary'
@@ -333,6 +334,11 @@ export default function App(): JSX.Element {
                       </div>
                       <div className="mat-legend">
                         習得 {m.mature} ・ 学習中 {m.learning} ・ 未 {m.unseen}
+                        {m.leeches > 0 && (
+                          <span className="leech-flag" title={`苦手カード（${LEECH_LAPSES}回以上ミス）`}>
+                            {' '}・ 🐌 {m.leeches}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}
