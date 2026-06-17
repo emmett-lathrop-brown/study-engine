@@ -18,7 +18,8 @@
     "dist": "electron-vite build && electron-builder --dir"
   },
   "dependencies": {
-    "gray-matter": "^4.0.3"
+    "react-markdown": "^9.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

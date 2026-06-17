@@ -52,12 +52,25 @@ export interface DomainInfo {
   new: number
 }
 
+export interface SessionItem {
+  id: string
+  topic: string
+  q: string
+  grade: number // last grade given this session (1..4)
+  correct: boolean // grade >= 3 (Good+), same rule as accuracy
+}
+
 export interface SessionSummary {
   session: string
   domain: string
+  // total/correct/byGrade count review *events*; items is deduped per question
+  // (last grade wins). They match 1:1 in normal flow (each question graded once
+  // per session); they only diverge if reviews.jsonl holds duplicate rows for an
+  // id in one session, which the UI never produces.
   total: number
   correct: number
   accuracy: number // 0..100
   byGrade: Record<number, number>
   weakTopics: string[]
+  items: SessionItem[] // per-question outcome, in answer order (for the result screen)
 }

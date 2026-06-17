@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PickedQuestion } from '../../engine/types'
 import { review, todayISO } from '../../engine/srs'
 import { api } from './api'
+import { Markdown } from './Markdown'
 
 const intervalLabel = (days: number): string => (days <= 0 ? '今日' : `${days}日`)
 
@@ -259,7 +260,10 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
         )}
 
         {(hintLoading || hintText) && (
-          <div className="hint-box">💡 {hintLoading ? '…考え中' : hintText}</div>
+          <div className="hint-box">
+            <span className="hint-icon">💡</span>
+            {hintLoading ? <span>…考え中</span> : <Markdown className="hint-md">{hintText ?? ''}</Markdown>}
+          </div>
         )}
 
         {!revealed ? (
@@ -325,7 +329,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
         {(diveLoading || dive) && (
           <div className="dive-panel">
             <div className="dive-head">🤔 深掘り{diveLoading ? ' …考え中' : ''}</div>
-            {dive && <div className="dive-body">{dive}</div>}
+            {dive && <Markdown className="dive-body">{dive}</Markdown>}
           </div>
         )}
       </div>

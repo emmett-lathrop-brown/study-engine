@@ -75,12 +75,17 @@ export default function App(): JSX.Element {
     try {
       const qs = await api.pickSession(domain, { limit, maxNew })
       if (qs.length === 0) {
+        // No session could be built (e.g. retried after the due queue drained).
+        // Route to the dashboard, which renders `error` — otherwise the message
+        // is swallowed when start() is invoked from the summary's もう一度.
         setError('出題できる問題がありません(問題ファイルが無い、または全て先の予定)。')
+        setView({ k: 'dashboard' })
       } else {
         setView({ k: 'session', domain, sessionId: makeSessionId(), questions: qs })
       }
     } catch (e) {
       setError(String(e))
+      setView({ k: 'dashboard' })
     }
     setBusy(false)
   }
@@ -155,7 +160,14 @@ export default function App(): JSX.Element {
       />
     )
   } else if (view.k === 'summary') {
-    content = <Summary data={view.data} sessionId={view.sessionId} onBack={() => void refresh()} />
+    content = (
+      <Summary
+        data={view.data}
+        sessionId={view.sessionId}
+        onBack={() => void refresh()}
+        onRetry={() => void start(view.domain)}
+      />
+    )
   } else {
     content = (
       <div className="dashboard">

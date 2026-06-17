@@ -1,6 +1,7 @@
 import type {
   DomainInfo,
   PickedQuestion,
+  SessionItem,
   SessionSummary,
   SrsState
 } from './types'
@@ -125,17 +126,27 @@ export async function summary(
 ): Promise<SessionSummary> {
   const reviews = (await readReviews(root, domain)).filter((r) => r.session === session)
   const questions = await listQuestions(root, domain)
-  const topicById = new Map(questions.map((q) => [q.id, q.topic]))
+  const qById = new Map(questions.map((q) => [q.id, q]))
   const byGrade: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }
   const wrongTopic = new Map<string, number>()
+  // One item per question in first-answered order; a re-grade overwrites the grade.
+  const itemsById = new Map<string, SessionItem>()
   let correct = 0
   for (const r of reviews) {
     byGrade[r.grade] = (byGrade[r.grade] ?? 0) + 1
     if (r.grade >= 3) correct++
     else {
-      const t = topicById.get(r.id) ?? '?'
+      const t = qById.get(r.id)?.topic ?? '?'
       wrongTopic.set(t, (wrongTopic.get(t) ?? 0) + 1)
     }
+    const q = qById.get(r.id)
+    itemsById.set(r.id, {
+      id: r.id,
+      topic: q?.topic ?? '?',
+      q: q?.q ?? r.id,
+      grade: r.grade,
+      correct: r.grade >= 3
+    })
   }
   const total = reviews.length
   const weakTopics = [...wrongTopic.entries()]
@@ -149,6 +160,7 @@ export async function summary(
     correct,
     accuracy: total ? Math.round((correct / total) * 100) : 0,
     byGrade,
-    weakTopics
+    weakTopics,
+    items: [...itemsById.values()]
   }
 }

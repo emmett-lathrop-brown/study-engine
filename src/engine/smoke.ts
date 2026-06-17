@@ -91,6 +91,14 @@ async function main(): Promise<void> {
   const sum = await summary(root, 'demo/set', sess)
   ok(sum.total === 2 && sum.correct === 1 && sum.accuracy === 50, `summary: 2 answered, 1 correct, 50% (got ${sum.accuracy}%)`)
   ok(sum.weakTopics.includes('a'), 'weak topic surfaced (a)')
+  ok(sum.items.length === 2, `summary.items has one entry per question (got ${sum.items.length})`)
+  const easyItem = sum.items.find((i) => i.id === 'demo-set-a-0001')
+  ok(
+    !!easyItem && easyItem.grade === 4 && easyItem.correct && easyItem.q === 'Q for demo-set-a-0001?',
+    'item carries grade + correct + question text'
+  )
+  const againItem = sum.items.find((i) => i.id === 'demo-set-a-0002')
+  ok(!!againItem && againItem.grade === 1 && !againItem.correct, 'Again item marked incorrect')
 
   await fs.rm(root, { recursive: true, force: true })
 

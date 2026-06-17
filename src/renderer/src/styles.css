@@ -74,6 +74,9 @@ h1 {
   border-radius: 10px;
   padding: 11px 16px;
 }
+.ghost-btn:disabled {
+  opacity: 0.4;
+}
 .link {
   background: none;
   border: 0;
@@ -315,12 +318,22 @@ h1 {
 }
 .hint-box {
   margin-top: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   background: #222a18;
   border: 1px solid var(--hard);
   color: #ece4c6;
   border-radius: 11px;
   padding: 12px 16px;
-  white-space: pre-wrap;
+}
+.hint-icon {
+  flex: none;
+  line-height: 1.5;
+}
+.hint-md {
+  flex: 1;
+  min-width: 0;
 }
 .dive-panel {
   margin-top: 18px;
@@ -333,11 +346,86 @@ h1 {
   margin-bottom: 8px;
 }
 .dive-body {
-  white-space: pre-wrap;
   color: #cfd5e2;
   max-height: 340px;
   overflow-y: auto;
   line-height: 1.7;
+}
+
+/* ---------- markdown (hints / deep-dive) ---------- */
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.5em 0;
+  /* Keep single newlines in plain-text hints / error strings as line breaks
+     (CommonMark soft-breaks otherwise collapse to a space); blank-line
+     paragraph spacing still comes from the margin above. */
+  white-space: pre-line;
+}
+.md ul,
+.md ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.md li {
+  margin: 0.2em 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 0.8em 0 0.3em;
+  line-height: 1.4;
+}
+.md a {
+  color: var(--easy);
+  text-decoration: underline;
+}
+.md code {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.md pre {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.md blockquote {
+  margin: 0.6em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+.md table {
+  border-collapse: collapse;
+  margin: 0.6em 0;
+  font-size: 0.95em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--line);
+  padding: 5px 10px;
+  text-align: left;
+}
+.md th {
+  background: var(--panel2);
 }
 .claude-bar {
   display: flex;
@@ -529,21 +617,6 @@ h1 {
   padding: 40px 24px;
   text-align: center;
 }
-.stat-grid {
-  display: flex;
-  justify-content: center;
-  gap: 30px;
-  margin: 26px 0;
-}
-.stat .num {
-  font-size: 34px;
-  font-weight: 800;
-  color: var(--accent);
-}
-.stat .lbl {
-  color: var(--muted);
-  font-size: 12px;
-}
 .grade-breakdown {
   display: flex;
   justify-content: center;
@@ -588,4 +661,105 @@ h1 {
   color: var(--muted);
   white-space: pre-wrap;
   margin-top: 18px;
+}
+
+/* ---------- result screen (GameResult-style) ---------- */
+.hero-score {
+  margin: 22px 0 18px;
+}
+.hero-pct {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--accent);
+}
+.hero-sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.result-list {
+  text-align: left;
+  margin: 24px 0 8px;
+  /* Cap + scroll so a 15–20 question list never pushes the actions off-screen
+     (mirrors the .dive-body cap). */
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.result-list-head {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  margin-bottom: 7px;
+  background: var(--panel);
+}
+.result-row.ok {
+  border-left: 3px solid var(--good);
+}
+.result-row.ng {
+  border-left: 3px solid var(--again);
+}
+.rr-mark {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  font-weight: 700;
+}
+.result-row.ok .rr-mark {
+  color: var(--good);
+}
+.result-row.ng .rr-mark {
+  color: var(--again);
+}
+.rr-q {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rr-topic {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.rr-grade {
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 3px 9px;
+  min-width: 52px;
+  text-align: center;
+}
+.rr-grade.g1 {
+  color: var(--again);
+  background: #34191e;
+}
+.rr-grade.g2 {
+  color: var(--hard);
+  background: #2c2613;
+}
+.rr-grade.g3 {
+  color: var(--good);
+  background: #14322a;
+}
+.rr-grade.g4 {
+  color: var(--easy);
+  background: #16263f;
 }
