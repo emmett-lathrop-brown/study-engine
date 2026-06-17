@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   ok(info.length === 1 && info[0].domain === 'demo/set' && info[0].total === 3, 'domainInfo finds demo/set with 3 questions')
   ok(info[0].new === 3 && info[0].due === 0, 'all 3 are "new" before any review')
 
-  const picked = await pick(root, 'demo/set', { limit: 2, maxNew: 5 })
+  const picked = await pick(root, 'demo/set', { limit: 2, maxNew: 5, shuffle: false })
   ok(picked.length === 2, `pick respects limit (got ${picked.length})`)
   ok(picked.every((p) => p.isNew), 'fresh system -> all picked are new')
 

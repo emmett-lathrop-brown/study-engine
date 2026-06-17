@@ -77,8 +77,8 @@ export default function App(): JSX.Element {
     if (c.root) await refresh()
   }
 
-  const setVoice = async (voice: string, rate: number): Promise<void> => {
-    setConfig(await api.setVoice(voice, rate))
+  const setVoice = async (voice: string, rate: number, autoSpeak?: boolean): Promise<void> => {
+    setConfig(await api.setVoice(voice, rate, autoSpeak))
   }
 
   const setFontSize = async (fontSize: number): Promise<void> => {
@@ -187,6 +187,14 @@ export default function App(): JSX.Element {
               A＋
             </button>
           </label>
+          <label className="autospeak" title="出題・解答時に英語を自動読み上げ">
+            <input
+              type="checkbox"
+              checked={config.autoSpeak}
+              onChange={(e) => void setVoice(config.voice, config.rate, e.target.checked)}
+            />
+            自動読み上げ
+          </label>
           <button
             className="icon"
             title="テスト読み上げ"
@@ -219,6 +227,7 @@ export default function App(): JSX.Element {
         questions={view.questions}
         voice={config?.voice ?? 'Samantha'}
         rate={config?.rate ?? 165}
+        autoSpeak={config?.autoSpeak ?? true}
         onDone={() => void onSessionDone(view.domain, view.sessionId)}
       />
     )

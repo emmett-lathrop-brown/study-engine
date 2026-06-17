@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PickedQuestion } from '../../engine/types'
 import { review, todayISO } from '../../engine/srs'
 import { api } from './api'
@@ -45,10 +45,19 @@ interface Props {
   questions: PickedQuestion[]
   voice: string
   rate: number
+  autoSpeak: boolean
   onDone: () => void
 }
 
-export function Session({ domain, sessionId, questions, voice, rate, onDone }: Props): JSX.Element {
+export function Session({
+  domain,
+  sessionId,
+  questions,
+  voice,
+  rate,
+  autoSpeak,
+  onDone
+}: Props): JSX.Element {
   const [index, setIndex] = useState(0)
   const [revealed, setRevealed] = useState(false)
   const [selection, setSelection] = useState<string[]>([])
@@ -59,8 +68,26 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
   const [dive, setDive] = useState<string | null>(null)
   const [diveLoading, setDiveLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [shownId, setShownId] = useState(questions[0]?.id ?? '')
 
   const q = questions[index]
+
+  // Reset per-question UI state synchronously when the question changes, so the
+  // answer auto-read effect never observes a stale `revealed` across a transition
+  // (the old [index] effect reset it too late — after the read had already fired,
+  // which spoiled the next question's English answer aloud on every advance).
+  if (shownId !== q.id) {
+    setShownId(q.id)
+    setRevealed(false)
+    setSelection([])
+    setText('')
+    setHintText(null)
+    setHintLoading(false)
+    setDive(null)
+    setDiveLoading(false)
+    setCopied(false)
+  }
+
   const choice = isChoiceType(q.type)
   const correct = useMemo(() => correctLetters(q.answer), [q.answer])
   const prompt = useMemo(() => splitPrompt(q.q), [q.q])
@@ -78,18 +105,39 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     if (q.speak) void api.speak(q.speak, voice, rate)
   }, [q, voice, rate])
 
-  useEffect(() => {
-    setRevealed(false)
-    setSelection([])
-    setText('')
-    setHintText(null)
-    setHintLoading(false)
-    setDive(null)
-    setDiveLoading(false)
-    setCopied(false)
-  }, [index])
+  // Auto-read-once guards keyed by question id (NOT index) so navigating back to
+  // an already-read question never re-reads, and React re-renders never re-fire.
+  const spokenQ = useRef<string | null>(null)
+  const spokenA = useRef<string | null>(null)
 
-  const reveal = useCallback(() => setRevealed(true), [])
+  // EN->JA question case: read q.speak once when the question appears (before
+  // reveal), only when the target text is embedded in the prompt. Dormant on
+  // current JA->EN data (speakInPrompt always false), wired for future cards.
+  useEffect(() => {
+    if (!autoSpeak || !speakInPrompt || !q.speak) return
+    if (spokenQ.current === q.id) return
+    spokenQ.current = q.id
+    void api.stopSpeak().then(() => void api.speak(q.speak as string, voice, rate))
+    // voice/rate are intentionally omitted from deps: a mid-session change applies
+    // to the NEXT question's auto-read, not a re-read of the current one.
+  }, [q.id, autoSpeak, speakInPrompt])
+
+  // JA->EN answer case (the real data): read the English answer (q.speak) exactly
+  // once, fired from the explicit reveal ACTION — not a [revealed] effect, which
+  // could observe a stale `revealed` across a question transition and read the next
+  // answer prematurely. Gated by !speakInPrompt so an EN->JA card never double-reads;
+  // the spokenA ref keeps it once-per-question even if reveal is triggered twice.
+  const speakAnswerOnce = useCallback(() => {
+    if (!autoSpeak || speakInPrompt || !q.speak) return
+    if (spokenA.current === q.id) return
+    spokenA.current = q.id
+    void api.stopSpeak().then(() => void api.speak(q.speak as string, voice, rate))
+  }, [autoSpeak, speakInPrompt, q, voice, rate])
+
+  const reveal = useCallback(() => {
+    setRevealed(true)
+    speakAnswerOnce()
+  }, [speakAnswerOnce])
 
   const onGrade = useCallback(
     async (g: number) => {
@@ -117,6 +165,12 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
         }
         return
       }
+      // R replays the English audio (manual, ignores the once-guard).
+      if ((e.key === 'r' || e.key === 'R') && canSpeak) {
+        e.preventDefault()
+        speakNow()
+        return
+      }
       if (!revealed) {
         if (q.type === 'single_choice') {
           const k = e.key.toUpperCase()
@@ -124,6 +178,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
             e.preventDefault()
             setSelection([k])
             setRevealed(true)
+            speakAnswerOnce()
             return
           }
         }
@@ -138,7 +193,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     }
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
-  }, [revealed, reveal, onGrade])
+  }, [revealed, reveal, onGrade, canSpeak, speakNow, speakAnswerOnce, q.type, q.choices])
 
   // Quizlet-style: clicking a single_choice option commits + reveals instantly.
   // multi keeps toggle-then-確定 (you pick several first).
@@ -147,6 +202,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
     if (q.type === 'single_choice') {
       setSelection([letter])
       setRevealed(true)
+      speakAnswerOnce()
     } else {
       setSelection((s) => (s.includes(letter) ? s.filter((x) => x !== letter) : [...s, letter]))
     }
@@ -230,8 +286,11 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
 
   const canReveal = choice ? selection.length > 0 : true
 
-  const speakControl = canSpeak && (
-    <button className="icon speak-read" title="英語を読み上げ" onClick={speakNow}>
+  // Pre-reveal reader for EN->JA cards (English embedded in the prompt). The
+  // JA->EN answer reader lives in the reveal block below, so the two 🔊 buttons
+  // never both render on the same card.
+  const speakControl = speakInPrompt && (
+    <button className="icon speak-read" title="英語を読み上げ (R)" onClick={speakNow}>
       🔊
     </button>
   )
@@ -317,6 +376,11 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
           <div className="reveal">
             <div className={`verdict ${isCorrect === null ? '' : isCorrect ? 'ok' : 'ng'}`}>
               {isCorrect === null ? '模範解答' : isCorrect ? '正解' : '不正解'}：<b>{q.answer}</b>
+              {!speakInPrompt && Boolean(q.speak) && (
+                <button className="icon speak-read" title="英語を読み上げ (R)" onClick={speakNow}>
+                  🔊
+                </button>
+              )}
             </div>
             <div className="explanation">{q.explanation}</div>
             {q.source.length > 0 && (

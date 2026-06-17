@@ -21,6 +21,29 @@ export interface PickOptions {
   limit?: number // total questions in the session (default 15)
   maxNew?: number // cap on brand-new questions mixed in (default 8)
   on?: string // "today" override for testing
+  shuffle?: boolean // randomize order within due/new buckets (default true)
+  seed?: number // PRNG seed for reproducible order (default Date.now())
+}
+
+/** Tiny seeded PRNG (mulberry32) — no deps, reproducible under a fixed seed. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return (): number => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Fisher-Yates shuffle in place using the given random source. */
+function fisherYates<T>(arr: T[], rnd: () => number): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }
 
 /** Build a session: due reviews first, then fill with new questions. */
@@ -42,10 +65,21 @@ export async function pick(
     return { ...q, state: st, isNew }
   })
 
-  const dueReview = withState
-    .filter((x) => !x.isNew && x.state.due <= on)
-    .sort((a, b) => a.state.due.localeCompare(b.state.due))
-  const fresh = withState.filter((x) => x.isNew).sort((a, b) => a.id.localeCompare(b.id))
+  // Shuffle WITHIN each bucket (Fisher-Yates) but keep due-before-new: spaced
+  // repetition urgency must drive the session, so new cards never crowd out
+  // overdue ones. Deterministic when a seed is supplied (smoke/tests).
+  const shuffle = opts.shuffle ?? true
+  const rnd = mulberry32(opts.seed ?? Date.now())
+
+  const dueReview = withState.filter((x) => !x.isNew && x.state.due <= on)
+  const fresh = withState.filter((x) => x.isNew)
+  if (shuffle) {
+    fisherYates(dueReview, rnd)
+    fisherYates(fresh, rnd)
+  } else {
+    dueReview.sort((a, b) => a.state.due.localeCompare(b.state.due))
+    fresh.sort((a, b) => a.id.localeCompare(b.id))
+  }
 
   const picked: PickedQuestion[] = []
   for (const r of dueReview) {

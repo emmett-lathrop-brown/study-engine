@@ -14,6 +14,7 @@ export interface Settings {
   voice: string
   rate: number
   fontSize: number
+  autoSpeak: boolean
 }
 
 export interface DeepDiveArgs {
@@ -29,8 +30,8 @@ export interface DeepDiveArgs {
 const api = {
   getConfig: (): Promise<Settings> => ipcRenderer.invoke('config:get'),
   pickRoot: (): Promise<Settings> => ipcRenderer.invoke('config:pickRoot'),
-  setVoice: (voice: string, rate: number): Promise<Settings> =>
-    ipcRenderer.invoke('config:setVoice', voice, rate),
+  setVoice: (voice: string, rate: number, autoSpeak?: boolean): Promise<Settings> =>
+    ipcRenderer.invoke('config:setVoice', voice, rate, autoSpeak),
   setFontSize: (fontSize: number): Promise<Settings> =>
     ipcRenderer.invoke('config:setFontSize', fontSize),
 

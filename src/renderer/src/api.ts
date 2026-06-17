@@ -11,12 +11,15 @@ export interface PickOptions {
   limit?: number
   maxNew?: number
   on?: string
+  shuffle?: boolean
+  seed?: number
 }
 export interface Settings {
   root: string | null
   voice: string
   rate: number
   fontSize: number
+  autoSpeak: boolean
 }
 export interface DeepDiveArgs {
   id: string
@@ -42,7 +45,7 @@ export interface AskResult {
 export interface StudyApi {
   getConfig(): Promise<Settings>
   pickRoot(): Promise<Settings>
-  setVoice(voice: string, rate: number): Promise<Settings>
+  setVoice(voice: string, rate: number, autoSpeak?: boolean): Promise<Settings>
   setFontSize(fontSize: number): Promise<Settings>
   listDomains(): Promise<DomainInfo[]>
   stats(): Promise<StudyStats>

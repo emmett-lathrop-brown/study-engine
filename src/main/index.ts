@@ -15,6 +15,7 @@ interface Settings {
   voice: string
   rate: number
   fontSize: number // question-body base font size in px (content scales off this)
+  autoSpeak: boolean
 }
 const FONT_MIN = 16
 const FONT_MAX = 30
@@ -37,7 +38,8 @@ async function loadSettings(): Promise<Settings> {
     root,
     voice: saved.voice ?? 'Samantha',
     rate: saved.rate ?? 165,
-    fontSize: clampFont(saved.fontSize ?? 20)
+    fontSize: clampFont(saved.fontSize ?? 20),
+    autoSpeak: saved.autoSpeak ?? true
   }
 }
 
@@ -253,8 +255,8 @@ function registerIpc(): void {
     await saveSettings(settings)
     return settings
   })
-  ipcMain.handle('config:setVoice', async (_e, voice: string, rate: number) => {
-    settings = { ...settings, voice, rate }
+  ipcMain.handle('config:setVoice', async (_e, voice: string, rate: number, autoSpeak?: boolean) => {
+    settings = { ...settings, voice, rate, autoSpeak: autoSpeak ?? settings.autoSpeak }
     await saveSettings(settings)
     return settings
   })
