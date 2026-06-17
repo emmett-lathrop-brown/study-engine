@@ -4,6 +4,7 @@ import { LEECH_LAPSES } from '../../engine/srs'
 import { api, Settings, VOICES, ClaudeStatus } from './api'
 import { Session } from './Session'
 import { Summary } from './Summary'
+import { Heatmap } from './Heatmap'
 import { buildLearnQuestions } from './learn'
 
 type View =
@@ -279,24 +280,27 @@ export default function App(): JSX.Element {
     content = (
       <div className="dashboard">
         {stats && (
-          <div className="stats-strip">
-            <div className="stat-pill">
-              <span className="sp-num">🔥 {stats.streak}</span>
-              <span className="sp-lbl">継続(日)</span>
+          <>
+            <div className="stats-strip">
+              <div className="stat-pill">
+                <span className="sp-num">🔥 {stats.streak}</span>
+                <span className="sp-lbl">継続(日)</span>
+              </div>
+              <div className="stat-pill">
+                <span className="sp-num">{stats.reviewsToday}</span>
+                <span className="sp-lbl">今日</span>
+              </div>
+              <div className="stat-pill">
+                <span className="sp-num">{stats.totalReviews}</span>
+                <span className="sp-lbl">総レビュー</span>
+              </div>
+              <div className="stat-pill">
+                <span className="sp-num">{stats.reviewedDays}</span>
+                <span className="sp-lbl">学習日数</span>
+              </div>
             </div>
-            <div className="stat-pill">
-              <span className="sp-num">{stats.reviewsToday}</span>
-              <span className="sp-lbl">今日</span>
-            </div>
-            <div className="stat-pill">
-              <span className="sp-num">{stats.totalReviews}</span>
-              <span className="sp-lbl">総レビュー</span>
-            </div>
-            <div className="stat-pill">
-              <span className="sp-num">{stats.reviewedDays}</span>
-              <span className="sp-lbl">学習日数</span>
-            </div>
-          </div>
+            <Heatmap daily={stats.dailyCounts} />
+          </>
         )}
 
         <div className="controls">

@@ -170,6 +170,10 @@ async function main(): Promise<void> {
   const stats = await studyStats(root)
   ok(stats.reviewsToday === 2 && stats.totalReviews === 2, `studyStats counts today's reviews (got ${stats.reviewsToday}/${stats.totalReviews})`)
   ok(stats.streak === 1 && stats.reviewedDays === 1, `studyStats streak/days (got ${stats.streak}/${stats.reviewedDays})`)
+  ok(
+    stats.dailyCounts.length === 1 && stats.dailyCounts[0].day === today && stats.dailyCounts[0].count === 2,
+    `studyStats.dailyCounts records today's 2 reviews for the heatmap (got ${JSON.stringify(stats.dailyCounts)})`
+  )
   const dm = stats.maturity.find((m) => m.domain === 'demo/set')
   ok(!!dm && dm.total === 3 && dm.unseen === 1 && dm.learning === 2, `maturity split (got ${dm?.unseen} unseen / ${dm?.learning} learning)`)
 

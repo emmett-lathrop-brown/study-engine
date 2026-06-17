@@ -325,12 +325,18 @@ export async function studyStats(root: string, on?: string): Promise<StudyStats>
     streak++
     cursor = addDays(cursor, -1)
   }
+  // Per-day totals (only days with activity), ascending — the renderer fills the
+  // empty days to draw a GitHub-style contribution grid.
+  const dailyCounts = [...dayCounts.entries()]
+    .map(([day, count]) => ({ day, count }))
+    .sort((a, b) => a.day.localeCompare(b.day))
   return {
     streak,
     reviewsToday: dayCounts.get(today) ?? 0,
     totalReviews,
     reviewedDays: dayCounts.size,
-    maturity
+    maturity,
+    dailyCounts
   }
 }
 

@@ -87,12 +87,18 @@ export interface DomainMaturity {
   leeches: number // lapsed >= LEECH_LAPSES times (soft-flag; orthogonal to the buckets above)
 }
 
+export interface DayCount {
+  day: string // YYYY-MM-DD (local date)
+  count: number // reviews logged that day (across all domains)
+}
+
 export interface StudyStats {
   streak: number // consecutive days with >=1 review, ending today (grace: yesterday)
   reviewsToday: number
   totalReviews: number
   reviewedDays: number // distinct days studied
   maturity: DomainMaturity[]
+  dailyCounts: DayCount[] // per-day review totals (only non-zero days), ascending — for the heatmap
 }
 
 export interface SessionItem {
