@@ -36,6 +36,7 @@ export function parseQuestionJson(file: string, raw: string): Question {
     hint: d.hint ?? undefined,
     speak: d.speak ?? undefined,
     answer_ruby: ruby && ruby.length ? ruby : undefined,
+    answer_full: typeof d.answer_full === 'string' ? d.answer_full : undefined,
     file
   }
 }

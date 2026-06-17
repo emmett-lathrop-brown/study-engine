@@ -43,6 +43,10 @@
         "minItems": 2,
         "maxItems": 2
       }
+    },
+    "answer_full": {
+      "type": ["string", "null"],
+      "description": "cloze only: the complete model sentence with each blank's fill wrapped in [[...]], e.g. 'Our meeting starts [[at]] nine o'clock [[on]] Monday morning.'. The app shows this (with the [[...]] parts highlighted) as the model answer for cloze. null/absent for non-cloze."
     }
   },
   "allOf": [

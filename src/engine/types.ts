@@ -21,6 +21,7 @@ export interface Question {
   hint?: string // optional hint, shown on demand (not inline in the question)
   speak?: string // English text to read aloud (TTS); undefined for non-English
   answer_ruby?: RubyPair[] // per-word katakana ruby over an English answer
+  answer_full?: string // cloze: the complete sentence with blank fills wrapped in [[...]]
   file: string // absolute path on disk
 }
 

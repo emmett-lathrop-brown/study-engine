@@ -35,6 +35,7 @@ const api = {
   setFontSize: (fontSize: number): Promise<Settings> =>
     ipcRenderer.invoke('config:setFontSize', fontSize),
 
+  repoWebBase: (): Promise<string | null> => ipcRenderer.invoke('repo:webBase'),
   listDomains: (): Promise<DomainInfo[]> => ipcRenderer.invoke('domains:list'),
   stats: (): Promise<StudyStats> => ipcRenderer.invoke('stats:get'),
   pickSession: (domain: string, opts: PickOptions): Promise<PickedQuestion[]> =>

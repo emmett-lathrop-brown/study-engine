@@ -90,6 +90,19 @@ function runGit(cwd: string, args: string[]): Promise<{ code: number; out: strin
   })
 }
 
+// GitHub blob base for the study-log repo (e.g. https://github.com/owner/repo/blob/main),
+// derived from its git remote so the UI can deep-link a question to its source file.
+// null if root is unset or the remote is not a github URL.
+async function repoWebBase(): Promise<string | null> {
+  if (!settings.root) return null
+  const remote = await runGit(settings.root, ['remote', 'get-url', 'origin'])
+  const m = remote.out.match(/github\.com[:/]+([^/]+)\/(.+?)(?:\.git)?\s*$/)
+  if (remote.code !== 0 || !m) return null
+  const branch = await runGit(settings.root, ['rev-parse', '--abbrev-ref', 'HEAD'])
+  const ref = branch.code === 0 && branch.out && branch.out !== 'HEAD' ? branch.out : 'main'
+  return `https://github.com/${m[1]}/${m[2]}/blob/${ref}`
+}
+
 async function commit(message: string): Promise<{ ok: boolean; out: string }> {
   const root = requireRoot()
   await runGit(root, ['add', '-A'])
@@ -266,6 +279,7 @@ function registerIpc(): void {
     return settings
   })
 
+  ipcMain.handle('repo:webBase', () => repoWebBase())
   ipcMain.handle('domains:list', () => domainInfo(requireRoot()))
   ipcMain.handle('stats:get', () => studyStats(requireRoot()))
   ipcMain.handle('session:pick', (_e, domain: string, opts: PickOptions) =>

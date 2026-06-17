@@ -39,6 +39,27 @@ const splitPrompt = (raw: string): { instruction: string | null; body: string } 
   return { instruction: head || null, body: rest }
 }
 
+// Render a cloze answer_full string: the full sentence with [[fill]] blank parts
+// highlighted via <mark>. Plain text otherwise.
+const renderCloze = (s: string): JSX.Element[] => {
+  const out: JSX.Element[] = []
+  const re = /\[\[(.+?)\]\]/g
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) out.push(<span key={i++}>{s.slice(last, m.index)}</span>)
+    out.push(
+      <mark key={i++} className="blank">
+        {m[1]}
+      </mark>
+    )
+    last = m.index + m[0].length
+  }
+  if (last < s.length) out.push(<span key={i++}>{s.slice(last)}</span>)
+  return out
+}
+
 interface Props {
   domain: string
   sessionId: string
@@ -69,7 +90,13 @@ export function Session({
   const [diveLoading, setDiveLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
+  const [repoBase, setRepoBase] = useState<string | null>(null)
   const [shownId, setShownId] = useState(questions[0]?.id ?? '')
+
+  // GitHub blob base of the study-log repo, fetched once, for the source link.
+  useEffect(() => {
+    void api.repoWebBase().then(setRepoBase)
+  }, [])
 
   const q = questions[index]
 
@@ -295,6 +322,8 @@ export function Session({
   }
 
   const canReveal = choice ? selection.length > 0 : true
+  // Deep link to this question's source JSON on GitHub (study-log repo).
+  const ghUrl = repoBase ? `${repoBase}/${q.domain}/questions/${q.file.split('/').pop()}` : null
 
   // Pre-reveal reader for EN->JA cards (English embedded in the prompt). The
   // JA->EN answer reader lives in the reveal block below, so the two 🔊 buttons
@@ -322,11 +351,6 @@ export function Session({
       <div className="card">
         <div className="meta">
           <div className="meta-row">
-            <span className="pill">{domain}</span>
-            <span className="pill ghost">{q.topic}</span>
-            <span className="pill ghost">{q.type}</span>
-          </div>
-          <div className="meta-row">
             {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
             <button
               className="pill id-pill"
@@ -336,7 +360,22 @@ export function Session({
             >
               {idCopied ? '✓ コピーしました' : `🆔 ${q.id}`}
             </button>
+            {ghUrl && (
+              <button
+                className="pill id-link"
+                type="button"
+                title="この問題のJSONをGitHubで開く"
+                onClick={() => api.openExternal(ghUrl)}
+              >
+                ↗ GitHub
+              </button>
+            )}
             {speakControl}
+          </div>
+          <div className="meta-row">
+            <span className="pill">{domain}</span>
+            <span className="pill ghost">{q.topic}</span>
+            <span className="pill ghost">{q.type}</span>
           </div>
         </div>
 
@@ -398,7 +437,9 @@ export function Session({
           <div className="reveal">
             <div className={`verdict ${isCorrect === null ? '' : isCorrect ? 'ok' : 'ng'}`}>
               {isCorrect === null ? '模範解答' : isCorrect ? '正解' : '不正解'}：
-              {q.answer_ruby && q.answer_ruby.length ? (
+              {q.type === 'cloze' && q.answer_full ? (
+                <b className="answer-cloze">{renderCloze(q.answer_full)}</b>
+              ) : q.answer_ruby && q.answer_ruby.length ? (
                 <b className="answer-ruby">
                   {q.answer_ruby.map(([w, r], i) =>
                     r ? (
@@ -416,6 +457,11 @@ export function Session({
                 <b>{q.answer}</b>
               )}
             </div>
+            {Boolean(q.speak) && (
+              <button type="button" className="speak-answer" onClick={() => speakNow()}>
+                🔊 英語を読み上げ <span className="key">R</span>
+              </button>
+            )}
             <div className="explanation">{q.explanation}</div>
             {q.source.length > 0 && (
               <div className="sources">
@@ -444,11 +490,6 @@ export function Session({
               ))}
             </div>
             <div className="actions">
-              {Boolean(q.speak) && (
-                <button type="button" className="ghost-btn" onClick={() => speakNow()}>
-                  🔊 英語を再生 (R)
-                </button>
-              )}
               <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
                 🤔 深掘り
               </button>

@@ -196,11 +196,11 @@ export default function App(): JSX.Element {
             自動読み上げ
           </label>
           <button
-            className="icon"
-            title="テスト読み上げ"
+            className="icon voice-test"
+            title="現在の声で固定フレーズを試聴（回答の読み上げではありません）"
             onClick={() => void api.speak('Hello, this is your study voice.', config.voice, config.rate)}
           >
-            🔊
+            🔊 声テスト
           </button>
         </div>
       </header>

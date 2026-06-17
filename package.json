@@ -15,6 +15,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
     "smoke": "tsx src/engine/smoke.ts",
+    "test:speak": "electron-vite build && node scripts/test-speak.mjs",
     "dist": "electron-vite build && electron-builder --dir"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "electron": "^33.4.11",
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.3.0",
+    "playwright-core": "^1.61.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsx": "^4.16.2",

@@ -47,6 +47,7 @@ export interface StudyApi {
   pickRoot(): Promise<Settings>
   setVoice(voice: string, rate: number, autoSpeak?: boolean): Promise<Settings>
   setFontSize(fontSize: number): Promise<Settings>
+  repoWebBase(): Promise<string | null>
   listDomains(): Promise<DomainInfo[]>
   stats(): Promise<StudyStats>
   pickSession(domain: string, opts: PickOptions): Promise<PickedQuestion[]>
