@@ -959,6 +959,39 @@ h1 {
 .verdict.ng {
   color: var(--again);
 }
+/* Write-mode local auto-judgment: a suggested-grade chip for typed answers. The
+   accent colour tracks the suggested grade (Good/Hard/Again); it is advisory only. */
+.write-judge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  font-size: 13px;
+}
+.write-judge .wj-label {
+  font-weight: 700;
+}
+.write-judge.wj-3 .wj-label {
+  color: var(--good);
+}
+.write-judge.wj-2 .wj-label {
+  color: var(--hard);
+}
+.write-judge.wj-1 .wj-label {
+  color: var(--again);
+}
+.write-judge .wj-pct {
+  color: var(--text);
+}
+.write-judge .wj-note {
+  color: var(--muted);
+  font-size: 11px;
+}
 /* Per-word katakana ruby (furigana) over an English answer. Token surfaces
    concatenate back to the exact answer (spaces/punctuation are tokens with no
    reading), so no inter-token margin is added here. */

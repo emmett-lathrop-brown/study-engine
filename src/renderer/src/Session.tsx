@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PickedQuestion } from '../../engine/types'
 import { review, todayISO } from '../../engine/srs'
+import { scoreWrite } from '../../engine/write'
 import { api } from './api'
 import { Markdown } from './Markdown'
 import { ChatPanel } from './ChatPanel'
@@ -13,6 +14,9 @@ const GRADES = [
   { g: 3, label: 'Good', jp: '普通', cls: 'good' },
   { g: 4, label: 'Easy', jp: '簡単', cls: 'easy' }
 ] as const
+
+// Labels for the local write-mode auto-judgment, keyed by suggested grade.
+const WRITE_JUDGE: Record<number, string> = { 3: 'ほぼ正解', 2: '惜しい', 1: '要復習' }
 
 const isChoiceType = (t: string): boolean => t === 'single_choice' || t === 'multi'
 const letterOf = (choice: string): string => {
@@ -132,7 +136,13 @@ export function Session({
   const isCorrect = choice
     ? selection.length === correct.length && correct.every((c) => selection.includes(c))
     : null
-  const suggested = choice ? (isCorrect ? 3 : 1) : 3
+  // Write mode: fuzzy-score a typed translation answer locally to SUGGEST a self-grade
+  // (the learner still confirms). Frozen at reveal since the input disables then.
+  const writeMatch = useMemo(
+    () => (q.type === 'translation' && text.trim() ? scoreWrite(text, q.answer) : null),
+    [q.type, q.answer, text]
+  )
+  const suggested = choice ? (isCorrect ? 3 : 1) : writeMatch ? writeMatch.grade : 3
 
   const speakNow = useCallback(() => {
     if (q.speak) void api.speak(q.speak, voice, rate)
@@ -363,7 +373,11 @@ export function Session({
         ) : (
           <textarea
             className="answer-input"
-            placeholder="ここに回答を入力(自己採点用。Cmd+Enterで答え合わせ)"
+            placeholder={
+              q.type === 'translation'
+                ? '訳をタイプ → Cmd+Enter で答え合わせ（入力を自動判定して自己評価の参考にします）'
+                : 'ここに回答を入力(自己採点用。Cmd+Enterで答え合わせ)'
+            }
             value={text}
             onChange={(e) => setText(e.target.value)}
             disabled={revealed}
@@ -414,6 +428,13 @@ export function Session({
                 <b>{q.answer}</b>
               )}
             </div>
+            {writeMatch && (
+              <div className={`write-judge wj-${writeMatch.grade}`}>
+                <span className="wj-label">自動判定：{WRITE_JUDGE[writeMatch.grade]}</span>
+                <span className="wj-pct">一致度 {writeMatch.percent}%</span>
+                <span className="wj-note">参考値・自己評価で確定してください</span>
+              </div>
+            )}
             {Boolean(q.speak) && (
               <button type="button" className="speak-answer" onClick={() => speakNow()}>
                 🔊 英語を読み上げ <span className="key">R</span>

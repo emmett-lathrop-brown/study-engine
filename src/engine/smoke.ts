@@ -16,6 +16,7 @@ import {
 import { writeState, readState, readChat, writeChat } from './store'
 import { pick, record, summary, domainInfo, studyStats, rebuildState, diffState } from './session'
 import { exportMarkdown } from './export'
+import { scoreWrite } from './write'
 
 let failures = 0
 function ok(cond: boolean, msg: string): void {
@@ -77,6 +78,25 @@ async function main(): Promise<void> {
   ok(grew && hs.interval > 6, `repeated Hard grows, never shrinks (6 -> ${hs.interval})`)
   // A legacy card with ease below the new floor is rescued up to EASE_MIN on success.
   ok(review({ interval: 10, ease: 1.4, due: today, reps: 3, lapses: 0 }, 3, today).ease === EASE_MIN, `legacy ease < ${EASE_MIN} rescued to floor on Good`)
+
+  // --- write-mode fuzzy scoring (translation type-in) -------------------
+  const ans = 'I have been studying English for three years.'
+  ok(scoreWrite(ans, ans).grade === 3 && scoreWrite(ans, ans).similarity === 1, 'exact answer -> similarity 1, suggest Good')
+  ok(scoreWrite('Hello, WORLD!', 'hello world').grade === 3, 'case + punctuation differences are ignored (normalize)')
+  ok(scoreWrite('sat the cat', 'the cat sat').grade === 3, 'reordered words still score Good (token Dice rescues word order)')
+  ok(scoreWrite('I have studied English for three years', ans).grade >= 2, 'a near-miss (one word off) scores Good/Hard, not Again')
+  ok(scoreWrite('English is hard', ans).grade === 1, 'an unrelated answer scores Again')
+  ok(scoreWrite('', ans).grade === 1, 'empty input scores Again (nothing to credit)')
+  // Japanese: char-level edit distance carries it where there are no spaces to tokenise.
+  ok(scoreWrite('私は猫が好きです', '私は猫が好きです').grade === 3, 'exact Japanese answer -> Good (char-level)')
+  ok(scoreWrite('私は犬が好きです', '私は猫が好きです').grade === 2, 'one-character-off Japanese -> Hard, not Good/Again')
+  ok(scoreWrite('全然違う文章だよ', '私は猫が好きです').grade === 1, 'unrelated Japanese -> Again')
+  // Edge cases hardened in adversarial review:
+  ok(scoreWrite('!!!', '???').grade === 1, 'punctuation-only input vs punctuation-only answer is NOT a 100% match')
+  ok(scoreWrite('a a a a', 'a').grade === 1, 'one repeated keyword does not fully match a shorter answer (token multiset, not set)')
+  const astralA = String.fromCodePoint(0x20000, 0x20001) // 𠀀𠀁 (CJK Ext-B, surrogate pairs)
+  const astralB = String.fromCodePoint(0x20000, 0x20002) // 𠀀𠀂 — one of two code points differs
+  ok(scoreWrite(astralA, astralB).grade === 1, 'astral CJK compared per code-point (1 of 2 differ -> Again, no surrogate half-credit)')
 
   // --- Full session round-trip -----------------------------------------
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'study-smoke-'))
