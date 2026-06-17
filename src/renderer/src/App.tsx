@@ -46,6 +46,7 @@ export default function App(): JSX.Element {
   }
 
   const refresh = useCallback(async (): Promise<void> => {
+    setExportMsg(null) // don't carry a stale "wrote N md" note across dashboard visits
     const c = await api.getConfig()
     setConfig(c)
     if (!c.root) {

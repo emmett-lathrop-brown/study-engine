@@ -6,10 +6,24 @@ import { listDomains, listQuestions } from './store'
 // Obsidian-friendly Markdown export of the questions. The JSON under
 // questions/ stays the source of truth; this writes a sibling export/ folder
 // (per domain) of human-readable .md with YAML frontmatter (title/tags/source)
-// so the study-log doubles as an Obsidian vault. Re-running overwrites.
+// so the study-log doubles as an Obsidian vault. export/ is exporter-owned:
+// re-running overwrites and prunes notes for questions that no longer exist.
 
+// Fold every C0 control char (newline, lone CR, tab, ...) to a space so a
+// frontmatter scalar can't be broken by a stray control char.
+const foldControls = (s: string): string =>
+  s
+    .split('')
+    .map((c) => (c.charCodeAt(0) < 0x20 ? ' ' : c))
+    .join('')
+
+// Double-quote a YAML scalar, escaping backslash/quote then folding controls.
 const yamlStr = (s: string): string =>
-  `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ')}"`
+  `"${foldControls(s.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))}"`
+
+// Filesystem-safe note name; unicode-aware so distinct CJK / accented ids
+// (the engine is domain-generic) don't collapse to the same file.
+const safeBase = (id: string): string => id.replace(/[^\p{L}\p{N}._-]/gu, '_')
 
 function titleOf(q: Question): string {
   const head = q.q.split('\n')[0].replace(/[:：]\s*$/, '').trim()
@@ -48,12 +62,26 @@ export function questionToMarkdown(q: Question): string {
 export async function exportMarkdown(root: string): Promise<ExportResult[]> {
   const out: ExportResult[] = []
   for (const domain of await listDomains(root)) {
+    const qs = await listQuestions(root, domain)
+    if (qs.length === 0) continue // no questions → don't scaffold an empty export/ dir
     const dir = path.join(root, domain, 'export')
     await fs.mkdir(dir, { recursive: true })
-    const qs = await listQuestions(root, domain)
+
+    const expected = new Set(qs.map((q) => `${safeBase(q.id)}.md`))
+    let existing: string[] = []
+    try {
+      existing = await fs.readdir(dir)
+    } catch {
+      /* fresh export dir */
+    }
+    // Prune notes whose question was removed or whose id changed.
+    for (const name of existing) {
+      if (name.endsWith('.md') && !expected.has(name)) {
+        await fs.rm(path.join(dir, name)).catch(() => undefined)
+      }
+    }
     for (const q of qs) {
-      const base = q.id.replace(/[^\w.-]/g, '_')
-      await fs.writeFile(path.join(dir, `${base}.md`), questionToMarkdown(q), 'utf8')
+      await fs.writeFile(path.join(dir, `${safeBase(q.id)}.md`), questionToMarkdown(q), 'utf8')
     }
     out.push({ domain, count: qs.length, dir })
   }

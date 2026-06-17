@@ -135,4 +135,4 @@ src/renderer/    # React UI
 schema/ templates/   # 仕様・雛形
 ```
 
-データの既定パス: `STUDY_LOG` env → 設定ファイル → `…/akira-toriyama/study-log`。無ければ起動時にフォルダ選択。
+データの既定パス: `STUDY_LOG` env → 設定ファイル(`settings.json` の `root`)→ 無ければ起動時にフォルダ選択(ハードコードされた既定パスは無し)。
