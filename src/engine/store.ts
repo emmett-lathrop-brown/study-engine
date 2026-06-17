@@ -1,6 +1,6 @@
 import { promises as fs, existsSync } from 'fs'
 import * as path from 'path'
-import type { Question, QType, Review, StateMap } from './types'
+import type { Question, QType, Review, RubyPair, StateMap } from './types'
 
 // Storage layer over the private study-log repo:
 //   <root>/<domain>/questions/*.json   one question per file (structured source of truth)
@@ -15,6 +15,12 @@ export function domainPrefix(domain: string): string {
 export function parseQuestionJson(file: string, raw: string): Question {
   const d = JSON.parse(raw) as Partial<Question>
   const source = Array.isArray(d.source) ? d.source.map(String) : d.source ? [String(d.source)] : []
+  const ruby = Array.isArray(d.answer_ruby)
+    ? d.answer_ruby.filter(
+        (p): p is RubyPair =>
+          Array.isArray(p) && p.length === 2 && typeof p[0] === 'string' && typeof p[1] === 'string'
+      )
+    : undefined
   return {
     id: String(d.id ?? path.basename(file, '.json')),
     domain: String(d.domain ?? ''),
@@ -29,6 +35,7 @@ export function parseQuestionJson(file: string, raw: string): Question {
     explanation: d.explanation ?? '',
     hint: d.hint ?? undefined,
     speak: d.speak ?? undefined,
+    answer_ruby: ruby && ruby.length ? ruby : undefined,
     file
   }
 }

@@ -365,10 +365,15 @@ h1 {
 }
 .meta {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.meta-row {
+  display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 .pill {
   font-size: 11px;
@@ -639,16 +644,32 @@ h1 {
 .verdict {
   font-size: 16px;
   margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+}
+/* 🔊 sits inline right after the answer (normal flow, always clickable) —
+   not pushed to the row edge by margin-left:auto, which could land it off
+   a long wrapped answer. */
+.verdict .speak-read {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 .verdict.ok {
   color: var(--good);
 }
 .verdict.ng {
   color: var(--again);
+}
+/* Per-word katakana ruby (furigana) over an English answer. Token surfaces
+   concatenate back to the exact answer (spaces/punctuation are tokens with no
+   reading), so no inter-token margin is added here. */
+.answer-ruby ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+.answer-ruby rt {
+  font-size: 0.58em;
+  font-weight: 400;
+  color: var(--muted);
+  letter-spacing: -0.01em;
 }
 .explanation {
   color: #cfd5e2;

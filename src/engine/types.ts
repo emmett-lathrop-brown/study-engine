@@ -3,6 +3,9 @@
 
 export type QType = 'single_choice' | 'multi' | 'cloze' | 'translation' | 'free'
 
+// Per-word furigana for an English answer: [surface word, katakana reading].
+export type RubyPair = [string, string]
+
 export interface Question {
   id: string // e.g. "aws-clf-s3-0003"
   domain: string // e.g. "aws/clf"
@@ -17,6 +20,7 @@ export interface Question {
   explanation: string
   hint?: string // optional hint, shown on demand (not inline in the question)
   speak?: string // English text to read aloud (TTS); undefined for non-English
+  answer_ruby?: RubyPair[] // per-word katakana ruby over an English answer
   file: string // absolute path on disk
 }
 

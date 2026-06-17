@@ -300,7 +300,7 @@ export function Session({
   // JA->EN answer reader lives in the reveal block below, so the two 🔊 buttons
   // never both render on the same card.
   const speakControl = speakInPrompt && (
-    <button className="icon speak-read" title="英語を読み上げ (R)" onClick={speakNow}>
+    <button type="button" className="icon speak-read" title="英語を読み上げ (R)" onClick={() => speakNow()}>
       🔊
     </button>
   )
@@ -321,18 +321,23 @@ export function Session({
 
       <div className="card">
         <div className="meta">
-          <span className="pill">{domain}</span>
-          <span className="pill ghost">{q.topic}</span>
-          <span className="pill ghost">{q.type}</span>
-          {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
-          <button
-            className="pill id-pill"
-            title="この問題のIDをコピー（修正依頼に使えます）"
-            onClick={copyId}
-          >
-            {idCopied ? '✓ コピーしました' : `🆔 ${q.id}`}
-          </button>
-          {speakControl}
+          <div className="meta-row">
+            <span className="pill">{domain}</span>
+            <span className="pill ghost">{q.topic}</span>
+            <span className="pill ghost">{q.type}</span>
+          </div>
+          <div className="meta-row">
+            {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
+            <button
+              className="pill id-pill"
+              type="button"
+              title="この問題のIDをコピー（修正依頼に使えます）"
+              onClick={copyId}
+            >
+              {idCopied ? '✓ コピーしました' : `🆔 ${q.id}`}
+            </button>
+            {speakControl}
+          </div>
         </div>
 
         {prompt.instruction && <p className="q-instruction">{prompt.instruction}</p>}
@@ -392,9 +397,21 @@ export function Session({
         ) : (
           <div className="reveal">
             <div className={`verdict ${isCorrect === null ? '' : isCorrect ? 'ok' : 'ng'}`}>
-              {isCorrect === null ? '模範解答' : isCorrect ? '正解' : '不正解'}：<b>{q.answer}</b>
+              {isCorrect === null ? '模範解答' : isCorrect ? '正解' : '不正解'}：
+              {q.answer_ruby && q.answer_ruby.length ? (
+                <b className="answer-ruby">
+                  {q.answer_ruby.map(([w, r], i) => (
+                    <ruby key={i}>
+                      {w}
+                      <rt>{r}</rt>
+                    </ruby>
+                  ))}
+                </b>
+              ) : (
+                <b>{q.answer}</b>
+              )}
               {!speakInPrompt && Boolean(q.speak) && (
-                <button className="icon speak-read" title="英語を読み上げ (R)" onClick={speakNow}>
+                <button type="button" className="icon speak-read" title="英語を読み上げ (R)" onClick={() => speakNow()}>
                   🔊
                 </button>
               )}

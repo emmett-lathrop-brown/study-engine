@@ -33,7 +33,17 @@
     },
     "explanation": { "type": "string", "description": "key points in your own words (no source copy-paste); for choices, also why the others are wrong." },
     "hint": { "type": ["string", "null"], "description": "optional hint shown on demand (never the answer). null/absent if none — the app can ask Claude for one at study time." },
-    "speak": { "type": ["string", "null"], "description": "optional text the app reads aloud with `say` (target-language sentence). null/absent for non-language questions." }
+    "speak": { "type": ["string", "null"], "description": "optional text the app reads aloud with `say` (target-language sentence). null/absent for non-language questions." },
+    "answer_ruby": {
+      "type": ["array", "null"],
+      "description": "optional per-word katakana ruby for an English answer: array of [word, katakana] pairs, e.g. [[\"Mai\",\"マイ\"],[\"drinks\",\"ドリンクス\"]]. Rendered as furigana over the answer. null/absent for non-English answers.",
+      "items": {
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": 2,
+        "maxItems": 2
+      }
+    }
   },
   "allOf": [
     {
