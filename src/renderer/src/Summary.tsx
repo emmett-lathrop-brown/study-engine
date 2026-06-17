@@ -7,6 +7,7 @@ interface Props {
   sessionId: string
   onBack: () => void
   onRetry: () => void
+  onRedrill: (ids: string[]) => void
 }
 
 const GRADE_META: Record<number, { label: string; cls: string }> = {
@@ -16,15 +17,25 @@ const GRADE_META: Record<number, { label: string; cls: string }> = {
   4: { label: 'Easy', cls: 'g4' }
 }
 
-export function Summary({ data, sessionId, onBack, onRetry }: Props): JSX.Element {
+export function Summary({ data, sessionId, onBack, onRetry, onRedrill }: Props): JSX.Element {
   const [committing, setCommitting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false) // guards the one-shot retry/back nav
+
+  // Ids of this session's misses (grade <= 2, i.e. not correct) — the re-drill set.
+  // items is already deduped per question, so these ids are unique.
+  const wrongIds = data.items.filter((it) => !it.correct).map((it) => it.id)
 
   const retry = (): void => {
     if (leaving) return
     setLeaving(true)
     onRetry()
+  }
+
+  const redrill = (): void => {
+    if (leaving || wrongIds.length === 0) return
+    setLeaving(true)
+    onRedrill(wrongIds)
   }
 
   const commit = async (): Promise<void> => {
@@ -85,7 +96,21 @@ export function Summary({ data, sessionId, onBack, onRetry }: Props): JSX.Elemen
       )}
 
       <div className="actions center">
-        <button className="primary" onClick={retry} disabled={leaving}>
+        {wrongIds.length > 0 && (
+          <button
+            className="primary redrill"
+            onClick={redrill}
+            disabled={leaving}
+            title="このセッションで間違えた問題だけをもう一度出題します"
+          >
+            ↻ ミスをもう一度（{wrongIds.length}）
+          </button>
+        )}
+        <button
+          className={wrongIds.length > 0 ? 'ghost-btn' : 'primary'}
+          onClick={retry}
+          disabled={leaving}
+        >
           ↻ もう一度
         </button>
         <button

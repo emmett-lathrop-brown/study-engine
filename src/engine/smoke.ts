@@ -146,6 +146,27 @@ async function main(): Promise<void> {
   const againItem = sum.items.find((i) => i.id === 'demo-set-a-0002')
   ok(!!againItem && againItem.grade === 1 && !againItem.correct, 'Again item marked incorrect')
 
+  // --- re-drill: pick by an explicit id set -----------------------------
+  // a-0001 was graded Easy so it's no longer due today; the re-drill path must
+  // still return it (bypassing due/new selection), in the listed order, with its
+  // real recorded state — and skip unknown ids + collapse duplicates.
+  const redrill = await pick(root, 'demo/set', {
+    ids: ['demo-set-a-0002', 'demo-set-a-0001', 'no-such-id', 'demo-set-a-0002']
+  })
+  ok(
+    redrill.map((p) => p.id).join(',') === 'demo-set-a-0002,demo-set-a-0001',
+    `pick(ids) returns exactly the listed ids in order, skipping unknown + duplicate (got ${redrill.map((p) => p.id).join(',')})`
+  )
+  const a1 = redrill.find((p) => p.id === 'demo-set-a-0001')
+  ok(
+    !!a1 && a1.state.due > today && a1.state.reps === 1,
+    'pick(ids) re-drills a card that is no longer due, carrying its real recorded state'
+  )
+  // a-0002 was graded Again so its reps reset to 0; in the re-drill it must still
+  // read as a review (isNew=false), not NEW — every re-drilled id was just seen.
+  ok(redrill.every((p) => p.isNew === false), 'pick(ids) marks every re-drilled card as not-new (just-Again reps=0 card included)')
+  ok((await pick(root, 'demo/set', { ids: [] })).length === 0, 'pick(ids:[]) yields an empty session')
+
   const stats = await studyStats(root)
   ok(stats.reviewsToday === 2 && stats.totalReviews === 2, `studyStats counts today's reviews (got ${stats.reviewsToday}/${stats.totalReviews})`)
   ok(stats.streak === 1 && stats.reviewedDays === 1, `studyStats streak/days (got ${stats.streak}/${stats.reviewedDays})`)

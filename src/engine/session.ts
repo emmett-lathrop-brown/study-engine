@@ -1,6 +1,7 @@
 import type {
   DomainInfo,
   PickedQuestion,
+  Question,
   Review,
   SessionItem,
   SessionSummary,
@@ -34,6 +35,7 @@ export interface PickOptions {
   on?: string // "today" override for testing
   shuffle?: boolean // randomize order within due/new buckets (default true)
   seed?: number // PRNG seed for reproducible order (default Date.now())
+  ids?: string[] // re-drill: build the session from exactly these question ids
 }
 
 /** Tiny seeded PRNG (mulberry32) — no deps, reproducible under a fixed seed. */
@@ -70,11 +72,35 @@ export async function pick(
   const questions = await listQuestions(root, domain)
   const state = await readState(root)
 
-  const withState: PickedQuestion[] = questions.map((q) => {
+  const toPicked = (q: Question): PickedQuestion => {
     const st = state[q.id] ?? defaultState(on)
     const isNew = !state[q.id] || st.reps === 0
     return { ...q, state: st, isNew }
-  })
+  }
+
+  // Re-drill path: build the session from exactly the given ids, in the order
+  // listed, ignoring due/new selection and the limit/maxNew caps. The id set IS
+  // the session — used to immediately re-test the questions just missed (which
+  // record() has already pushed off to a future due date, so they would never
+  // resurface today via the bucket logic below). Unknown ids (no matching file)
+  // and duplicates are dropped; cards keep their real recorded state, but are
+  // forced isNew=false: every id here was just answered this session, so a card
+  // whose Again-grade reset reps to 0 must still read as 復習, not NEW.
+  if (opts.ids) {
+    const byId = new Map(questions.map((q) => [q.id, q]))
+    const seen = new Set<string>()
+    const out: PickedQuestion[] = []
+    for (const id of opts.ids) {
+      const q = byId.get(id)
+      if (q && !seen.has(id)) {
+        seen.add(id)
+        out.push({ ...toPicked(q), isNew: false })
+      }
+    }
+    return out
+  }
+
+  const withState: PickedQuestion[] = questions.map(toPicked)
 
   // Shuffle WITHIN each bucket (Fisher-Yates) but keep due-before-new: spaced
   // repetition urgency must drive the session, so new cards never crowd out

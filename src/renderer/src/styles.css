@@ -68,6 +68,10 @@ h1 {
 .primary:disabled {
   opacity: 0.4;
 }
+/* Re-drill the misses: a red-tinted primary so it reads as "drill what you got wrong". */
+.primary.redrill {
+  background: var(--again);
+}
 .ghost-btn {
   background: transparent;
   color: var(--text);

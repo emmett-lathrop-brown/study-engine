@@ -15,6 +15,7 @@ export interface PickOptions {
   on?: string
   shuffle?: boolean
   seed?: number
+  ids?: string[]
 }
 export interface Settings {
   root: string | null

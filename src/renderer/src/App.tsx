@@ -15,7 +15,12 @@ type View =
 
 function makeSessionId(d = new Date()): string {
   const p = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+  // Seconds + a short random suffix so a quick 「ミスをもう一度」 (or back-to-back
+  // retry) launched in the same wall-clock minute can never alias the finished
+  // session's id: summary() scopes purely by session string, so a collision would
+  // fold both sessions' reviews into one summary (inflated total / wrong accuracy).
+  return `${stamp}-${Math.random().toString(36).slice(2, 6)}`
 }
 
 export default function App(): JSX.Element {
@@ -96,16 +101,25 @@ export default function App(): JSX.Element {
     }
   }, [config?.fontSize])
 
-  const start = async (domain: string): Promise<void> => {
+  // Start a session. With `redrillIds`, rebuild a session from exactly those
+  // question ids (the misses just made) instead of the due/new queue — see
+  // Summary's 「ミスをもう一度」. Everything else (learn mode, error routing) is
+  // identical, so a re-drill behaves like もう一度 but scoped to the missed cards.
+  const start = async (domain: string, redrillIds?: string[]): Promise<void> => {
     setBusy(true)
     setError(null)
     try {
-      let qs = await api.pickSession(domain, { limit, maxNew })
+      let qs = await api.pickSession(domain, redrillIds ? { ids: redrillIds } : { limit, maxNew })
       if (qs.length === 0) {
-        // No session could be built (e.g. retried after the due queue drained).
-        // Route to the dashboard, which renders `error` — otherwise the message
-        // is swallowed when start() is invoked from the summary's もう一度.
-        setError('出題できる問題がありません(問題ファイルが無い、または全て先の予定)。')
+        // No session could be built (e.g. retried after the due queue drained, or
+        // every missed question's file has since gone). Route to the dashboard,
+        // which renders `error` — otherwise the message is swallowed when start()
+        // is invoked from the summary's もう一度 / ミスをもう一度.
+        setError(
+          redrillIds
+            ? 'ミスした問題を再出題できませんでした(問題ファイルが見つかりません)。'
+            : '出題できる問題がありません(問題ファイルが無い、または全て先の予定)。'
+        )
         setView({ k: 'dashboard' })
       } else {
         if (learnMode) {
@@ -258,6 +272,7 @@ export default function App(): JSX.Element {
         sessionId={view.sessionId}
         onBack={() => void refresh()}
         onRetry={() => void start(view.domain)}
+        onRedrill={(ids) => void start(view.domain, ids)}
       />
     )
   } else {
