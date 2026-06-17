@@ -389,6 +389,17 @@ h1 {
   color: var(--easy);
   border-color: var(--easy);
 }
+.id-pill {
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--muted);
+  transition: border-color 0.12s, color 0.12s;
+}
+.id-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
 /* Question = instruction (A, muted task label) + body (B, prominent block). */
 .q-instruction {
   font-size: 14px;

@@ -68,6 +68,7 @@ export function Session({
   const [dive, setDive] = useState<string | null>(null)
   const [diveLoading, setDiveLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [idCopied, setIdCopied] = useState(false)
   const [shownId, setShownId] = useState(questions[0]?.id ?? '')
 
   const q = questions[index]
@@ -86,7 +87,16 @@ export function Session({
     setDive(null)
     setDiveLoading(false)
     setCopied(false)
+    setIdCopied(false)
   }
+
+  // Copy this question's unique id to the clipboard — the handle the user pastes
+  // into a fix request ("english-core-0001 の答えが違う" etc.).
+  const copyId = useCallback((): void => {
+    void api.copyToClipboard(q.id)
+    setIdCopied(true)
+    window.setTimeout(() => setIdCopied(false), 1400)
+  }, [q.id])
 
   const choice = isChoiceType(q.type)
   const correct = useMemo(() => correctLetters(q.answer), [q.answer])
@@ -315,6 +325,13 @@ export function Session({
           <span className="pill ghost">{q.topic}</span>
           <span className="pill ghost">{q.type}</span>
           {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
+          <button
+            className="pill id-pill"
+            title="この問題のIDをコピー（修正依頼に使えます）"
+            onClick={copyId}
+          >
+            {idCopied ? '✓ コピーしました' : `🆔 ${q.id}`}
+          </button>
           {speakControl}
         </div>
 
