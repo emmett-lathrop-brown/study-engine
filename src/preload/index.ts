@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { DomainInfo, PickedQuestion, SessionSummary, SrsState, StudyStats } from '../engine/types'
+import type {
+  DomainInfo,
+  ExportResult,
+  PickedQuestion,
+  SessionSummary,
+  SrsState,
+  StudyStats
+} from '../engine/types'
 import type { PickOptions } from '../engine/session'
 
 export interface Settings {
@@ -46,6 +53,7 @@ const api = {
   stopSpeak: (): Promise<void> => ipcRenderer.invoke('speak:stop'),
   commit: (message: string): Promise<{ ok: boolean; out: string }> =>
     ipcRenderer.invoke('git:commit', message),
+  exportMarkdown: (): Promise<ExportResult[]> => ipcRenderer.invoke('export:md'),
   deepDivePrompt: (a: DeepDiveArgs): Promise<string> => ipcRenderer.invoke('deepdive:prompt', a),
   copyToClipboard: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open:external', url),

@@ -52,6 +52,12 @@ export interface DomainInfo {
   new: number
 }
 
+export interface ExportResult {
+  domain: string
+  count: number
+  dir: string // absolute path of the export folder written
+}
+
 export interface DomainMaturity {
   domain: string
   total: number

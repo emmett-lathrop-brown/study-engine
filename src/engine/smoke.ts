@@ -6,6 +6,7 @@ import * as path from 'path'
 import { review, defaultState, todayISO, addDays } from './srs'
 import { writeState, readState } from './store'
 import { pick, record, summary, domainInfo, studyStats } from './session'
+import { exportMarkdown } from './export'
 
 let failures = 0
 function ok(cond: boolean, msg: string): void {
@@ -105,6 +106,12 @@ async function main(): Promise<void> {
   ok(stats.streak === 1 && stats.reviewedDays === 1, `studyStats streak/days (got ${stats.streak}/${stats.reviewedDays})`)
   const dm = stats.maturity.find((m) => m.domain === 'demo/set')
   ok(!!dm && dm.total === 3 && dm.unseen === 1 && dm.learning === 2, `maturity split (got ${dm?.unseen} unseen / ${dm?.learning} learning)`)
+
+  const exported = await exportMarkdown(root)
+  const ex = exported.find((e) => e.domain === 'demo/set')
+  ok(!!ex && ex.count === 3, `exportMarkdown writes one md per question (got ${ex?.count})`)
+  const md = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  ok(md.startsWith('---') && md.includes('## 解答') && md.includes('tags: ['), 'exported md has frontmatter + answer section')
 
   await fs.rm(root, { recursive: true, force: true })
 

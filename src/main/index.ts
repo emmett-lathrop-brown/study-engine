@@ -5,6 +5,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import { domainInfo, gradeOne, pick, studyStats, summary } from '../engine/session'
 import type { PickOptions } from '../engine/session'
+import { exportMarkdown } from '../engine/export'
 
 // ---------------------------------------------------------------------------
 // Config (study-log path + TTS voice) persisted in userData/settings.json
@@ -15,7 +16,6 @@ interface Settings {
   rate: number
   fontSize: number // question-body base font size in px (content scales off this)
 }
-const DEFAULT_ROOT = '/Volumes/workspace/github.com/akira-toriyama/study-log'
 const FONT_MIN = 16
 const FONT_MAX = 30
 const clampFont = (n: number): number => Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n)))
@@ -28,8 +28,10 @@ async function loadSettings(): Promise<Settings> {
   } catch {
     /* first run */
   }
-  const envRoot = process.env.STUDY_LOG
-  let root = envRoot ?? saved.root ?? (existsSync(DEFAULT_ROOT) ? DEFAULT_ROOT : null)
+  // Resolve the study-log location from the env override, then the saved
+  // choice; otherwise null → the UI shows the folder picker. (No hardcoded
+  // path: this is a public, machine-agnostic repo.)
+  let root = process.env.STUDY_LOG ?? saved.root ?? null
   if (root && !existsSync(root)) root = null
   return {
     root,
@@ -285,6 +287,7 @@ function registerIpc(): void {
       currentSay = null
     }
   })
+  ipcMain.handle('export:md', () => exportMarkdown(requireRoot()))
   ipcMain.handle('git:commit', (_e, message: string) => commit(message))
   ipcMain.handle('deepdive:prompt', (_e, a: DeepDiveArgs) => deepDivePrompt(a))
   ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))

@@ -1,4 +1,11 @@
-import type { DomainInfo, PickedQuestion, SessionSummary, SrsState, StudyStats } from '../../engine/types'
+import type {
+  DomainInfo,
+  ExportResult,
+  PickedQuestion,
+  SessionSummary,
+  SrsState,
+  StudyStats
+} from '../../engine/types'
 
 export interface PickOptions {
   limit?: number
@@ -45,6 +52,7 @@ export interface StudyApi {
   speak(text: string, voice?: string, rate?: number): Promise<void>
   stopSpeak(): Promise<void>
   commit(message: string): Promise<{ ok: boolean; out: string }>
+  exportMarkdown(): Promise<ExportResult[]>
   deepDivePrompt(a: DeepDiveArgs): Promise<string>
   copyToClipboard(text: string): Promise<void>
   openExternal(url: string): Promise<void>

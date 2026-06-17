@@ -27,6 +27,8 @@ export default function App(): JSX.Element {
   const [learnMode, setLearnMode] = useState(false)
   const [busy, setBusy] = useState(false)
   const [preparing, setPreparing] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [claude, setClaude] = useState<ClaudeStatus | null>(null)
   const [claudeBusy, setClaudeBusy] = useState(false)
@@ -121,6 +123,19 @@ export default function App(): JSX.Element {
   const onSessionDone = async (domain: string, sessionId: string): Promise<void> => {
     const data = await api.summary(domain, sessionId)
     setView({ k: 'summary', domain, sessionId, data })
+  }
+
+  const exportMd = async (): Promise<void> => {
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      const res = await api.exportMarkdown()
+      const total = res.reduce((n, r) => n + r.count, 0)
+      setExportMsg(`${total}問を各ドメインの export/ に Markdown 書き出ししました。`)
+    } catch (e) {
+      setExportMsg(`書き出し失敗: ${String(e)}`)
+    }
+    setExporting(false)
   }
 
   // Persistent top bar (same position on every page): title + voice/speed.
@@ -318,7 +333,15 @@ export default function App(): JSX.Element {
           </div>
         )}
 
-        <footer className="foot muted">データ: {config?.root}</footer>
+        <footer className="foot">
+          <div className="foot-actions">
+            <button className="ghost-btn sm" onClick={() => void exportMd()} disabled={exporting}>
+              {exporting ? '書き出し中…' : '📤 Obsidian用に md 書き出し'}
+            </button>
+            {exportMsg && <span className="muted">{exportMsg}</span>}
+          </div>
+          <div className="muted">データ: {config?.root}</div>
+        </footer>
       </div>
     )
   }

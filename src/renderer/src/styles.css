@@ -319,6 +319,13 @@ h1 {
   font-size: 12px;
   word-break: break-all;
 }
+.foot-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
 
 /* ---------- session ---------- */
 .session {
