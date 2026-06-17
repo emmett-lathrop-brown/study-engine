@@ -64,8 +64,11 @@ export async function listQuestions(root: string, domain: string): Promise<Quest
   return out
 }
 
-/** Discover domains: any <root>/<a>/<b> that contains a `questions/` dir. */
-export async function listDomains(root: string): Promise<string[]> {
+/** Walk <root>/<a>/<b> and keep the domains whose dir satisfies `hasMarker`. */
+async function discoverDomains(
+  root: string,
+  hasMarker: (domainDir: string) => boolean
+): Promise<string[]> {
   const out: string[] = []
   let level1: string[] = []
   try {
@@ -84,11 +87,26 @@ export async function listDomains(root: string): Promise<string[]> {
       continue
     }
     for (const b of level2) {
-      if (existsSync(path.join(aPath, b, 'questions'))) out.push(`${a}/${b}`)
+      if (hasMarker(path.join(aPath, b))) out.push(`${a}/${b}`)
     }
   }
   out.sort()
   return out
+}
+
+/** Discover domains: any <root>/<a>/<b> that contains a `questions/` dir. */
+export function listDomains(root: string): Promise<string[]> {
+  return discoverDomains(root, (dir) => existsSync(path.join(dir, 'questions')))
+}
+
+/**
+ * Discover domains that have answer history: any <root>/<a>/<b> with a
+ * `logs/reviews.jsonl`. Used by rebuildState so history is found even for a
+ * domain whose `questions/` dir is absent (renamed/mid-migration) — listDomains
+ * would skip it, silently dropping its state on a rebuild.
+ */
+export function listReviewDomains(root: string): Promise<string[]> {
+  return discoverDomains(root, (dir) => existsSync(path.join(dir, 'logs', 'reviews.jsonl')))
 }
 
 const statePath = (root: string): string => path.join(root, 'srs', 'state.json')

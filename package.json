@@ -15,6 +15,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "pnpm typecheck:node && pnpm typecheck:web",
     "smoke": "tsx src/engine/smoke.ts",
+    "rebuild-state": "tsx scripts/rebuild-state.ts",
     "test:speak": "electron-vite build && node scripts/test-speak.mjs",
     "dist": "electron-vite build && electron-builder --dir"
   },

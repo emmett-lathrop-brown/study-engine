@@ -14,7 +14,7 @@ import {
   LEECH_LAPSES
 } from './srs'
 import { writeState, readState, readChat, writeChat } from './store'
-import { pick, record, summary, domainInfo, studyStats } from './session'
+import { pick, record, summary, domainInfo, studyStats, rebuildState, diffState } from './session'
 import { exportMarkdown } from './export'
 
 let failures = 0
@@ -192,6 +192,62 @@ async function main(): Promise<void> {
   await exportMarkdown(root)
   const clearedMd = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
   ok(!clearedMd.includes('## Claude チャット'), 'no chat -> no chat section in exported md')
+
+  // --- rebuild-state replay: state is a pure function of (live) history -------
+  // Drive a synthetic card through a multi-review LIVE history (no `on` override,
+  // so each review's stored ts date == the fuzz seed-day record() used), through
+  // graduating steps + a lapse + a Hard, then assert rebuildState() replays
+  // reviews.jsonl back to the recorded state bit-for-bit. (This chain ends on a
+  // graduating step; the dedicated fuzz card below guards seed reproduction.)
+  const rsess = `${today}-replay`
+  await record(root, 'demo/set', rsess, [{ id: 'replay-card-1', grade: 3 }]) // reps0 Good -> 1
+  await record(root, 'demo/set', rsess, [{ id: 'replay-card-1', grade: 3 }]) // reps1 Good -> 6
+  await record(root, 'demo/set', rsess, [{ id: 'replay-card-1', grade: 3 }]) // reps2 Good -> mult, fuzzed mid-chain
+  await record(root, 'demo/set', rsess, [{ id: 'replay-card-1', grade: 1 }]) // Again -> lapse, ease-0.2
+  await record(root, 'demo/set', rsess, [{ id: 'replay-card-1', grade: 2 }]) // Hard (reps reset) -> 1
+  const live = await readState(root)
+  const rebuilt = await rebuildState(root)
+  const eq = (id: string): boolean => JSON.stringify(rebuilt[id]) === JSON.stringify(live[id])
+  ok(eq('replay-card-1'), 'rebuildState replays a multi-review live history (graduating + lapse + Hard)')
+  ok(rebuilt['replay-card-1'].reps === 1 && rebuilt['replay-card-1'].lapses === 1, 'replayed card carries reps/lapses from the full chain')
+  ok(eq('demo-set-a-0001') && eq('demo-set-a-0002'), 'rebuildState reproduces every live-recorded card from history')
+  // Contract boundary: b-0001's live state was hand-injected (leech setup), not
+  // built from its one Good review, so replay must NOT reproduce it.
+  ok(!eq('demo-set-b-0001'), 'rebuildState does NOT reproduce a hand-injected (non-history) state — documents the contract')
+
+  // Every id here has a review row, so nothing is added/removed; b-0001 is the
+  // lone `changed` entry (injected, not history-built); the other 3 round-trip.
+  const diff = diffState(live, rebuilt)
+  ok(
+    diff.added.length === 0 && diff.removed.length === 0 && diff.unchanged === 3 &&
+      diff.changed.length === 1 && diff.changed[0].id === 'demo-set-b-0001',
+    `diffState isolates the one non-history id (changed ${diff.changed.length}, unchanged ${diff.unchanged})`
+  )
+  const self = diffState(live, live)
+  ok(self.changed.length === 0 && self.added.length === 0 && self.unchanged > 0, 'diffState: identical maps report no changes')
+
+  // Fuzz must survive the round-trip. Pick an id whose multiplied interval is
+  // actually jittered TODAY (~2/3 of seeds move it), drive it live to exactly
+  // that interval as its FINAL state, then assert the rebuilt interval equals
+  // the recorded one AND differs from the bare multiple — so a rebuildState that
+  // forgot to pass the seed (fuzz disabled) would fail here, not pass silently.
+  const fprev = { interval: 6, ease: 2.5, due: today, reps: 2, lapses: 0 } // state just before the 3rd Good
+  const exactMul = Math.round(6 * 2.5) // 15 — the UNFUZZED multiplied interval
+  let fid = ''
+  for (let i = 0; i < 256 && !fid; i++) {
+    const cand = `replay-fuzz-${i}`
+    if (review(fprev, 3, today, fuzzSeed(cand, today)).interval !== exactMul) fid = cand
+  }
+  ok(fid !== '', 'found an id whose multiplied interval is fuzzed today (for the fuzz round-trip guard)')
+  const fsess = `${today}-replayfuzz`
+  await record(root, 'demo/set', fsess, [{ id: fid, grade: 3 }]) // reps0 -> 1
+  await record(root, 'demo/set', fsess, [{ id: fid, grade: 3 }]) // reps1 -> 6
+  await record(root, 'demo/set', fsess, [{ id: fid, grade: 3 }]) // reps2 -> fuzz(15): final state carries the fuzz
+  const live2 = await readState(root)
+  const rebuilt2 = await rebuildState(root)
+  ok(live2[fid].interval !== exactMul, `record() actually fuzzed the final interval (got ${live2[fid].interval}, bare ${exactMul})`)
+  ok(rebuilt2[fid].interval === live2[fid].interval, 'rebuildState reproduces the fuzzed multiplied interval bit-for-bit')
+  ok(rebuilt2[fid].interval !== exactMul, 'rebuilt interval is the fuzzed value, not the bare multiple (would fail if the seed were dropped)')
 
   await fs.rm(root, { recursive: true, force: true })
 

@@ -1,9 +1,11 @@
 import type {
   DomainInfo,
   PickedQuestion,
+  Review,
   SessionItem,
   SessionSummary,
   SrsState,
+  StateMap,
   StudyStats
 } from './types'
 import {
@@ -20,6 +22,7 @@ import {
   domainPrefix,
   listDomains,
   listQuestions,
+  listReviewDomains,
   readReviews,
   readState,
   writeState
@@ -146,6 +149,96 @@ export async function gradeOne(
 ): Promise<{ id: string; state: SrsState }> {
   const [r] = await record(root, domain, session, [{ id, grade }], on)
   return r
+}
+
+/**
+ * Rebuild the global SM-2 state purely from review history — the inverse of
+ * record(). For each card, fold review() over its reviews in append order
+ * (reviews.jsonl is the append-only source of truth) and derive both the
+ * calendar day and the fuzz seed from each review's own stored ts, exactly as
+ * record() did. A card whose entire history was recorded live therefore
+ * reproduces its stored state bit-for-bit, including the fuzzed interval:
+ * record() reads one clock for both the seed-day and the ts, so day ===
+ * ts.slice(0,10) and `review(prev, grade, day, fuzzSeed(id, day))` replays
+ * identically. Two cards do NOT round-trip: those graded via the `on` test
+ * override (their ts is wall-clock, not `on`, so the seed-day differs), and any
+ * card whose stored state was hand-injected rather than built from its reviews.
+ *
+ * Cards with no history get no entry — and every consumer treats a missing id
+ * identically to a seeded reps=0/no-last_review default (pick() via
+ * `?? defaultState()`, domainInfo/studyStats/summary via missing-or-default
+ * guards), so dropping inert default entries is behaviour-preserving. History
+ * is discovered via listReviewDomains() (any domain with a logs/reviews.jsonl),
+ * NOT listDomains(), so a domain whose questions/ dir is absent still has its
+ * state rebuilt rather than silently dropped. An id that somehow appears under
+ * two domains is replayed in domain (sorted) order, not interleaved by ts —
+ * unreachable on the live path (domain-prefixed ids, one domain per session).
+ *
+ * Pure read: returns the rebuilt map and writes nothing. Use it to recompute
+ * state.json after changing the scheduler (or migrating to FSRS), or as a smoke
+ * invariant that record() and review() stay in agreement.
+ */
+export async function rebuildState(root: string): Promise<StateMap> {
+  const byId = new Map<string, Review[]>()
+  for (const domain of await listReviewDomains(root)) {
+    for (const r of await readReviews(root, domain)) {
+      const arr = byId.get(r.id)
+      if (arr) arr.push(r)
+      else byId.set(r.id, [r])
+    }
+  }
+  const state: StateMap = {}
+  for (const [id, reviews] of byId) {
+    // Seed from defaultState on the first review's day; interval/ease/reps are
+    // overwritten by the first review() call, so only a sane starting `due`
+    // matters here. Then replay in append order — the true event order.
+    let st = defaultState(reviews[0].ts.slice(0, 10))
+    for (const r of reviews) {
+      const day = r.ts.slice(0, 10)
+      st = srsReview(st, r.grade, day, fuzzSeed(r.id, day))
+    }
+    state[id] = st
+  }
+  return state
+}
+
+export interface StateDiff {
+  added: string[] // ids present in rebuilt but not in current (new history)
+  removed: string[] // ids present in current but not in rebuilt (no-history / orphan entries)
+  changed: Array<{ id: string; from: SrsState; to: SrsState }>
+  unchanged: number
+}
+
+function sameState(a: SrsState, b: SrsState): boolean {
+  return (
+    a.interval === b.interval &&
+    a.ease === b.ease &&
+    a.due === b.due &&
+    a.reps === b.reps &&
+    a.lapses === b.lapses &&
+    (a.last_review ?? '') === (b.last_review ?? '') &&
+    (a.last_grade ?? 0) === (b.last_grade ?? 0)
+  )
+}
+
+/** Field-wise diff of a current state map against a rebuilt one (key-order independent). */
+export function diffState(current: StateMap, rebuilt: StateMap): StateDiff {
+  const added: string[] = []
+  const removed: string[] = []
+  const changed: Array<{ id: string; from: SrsState; to: SrsState }> = []
+  let unchanged = 0
+  for (const id of new Set([...Object.keys(current), ...Object.keys(rebuilt)])) {
+    const a = current[id]
+    const b = rebuilt[id]
+    if (a && !b) removed.push(id)
+    else if (!a && b) added.push(id)
+    else if (sameState(a, b)) unchanged++
+    else changed.push({ id, from: a, to: b })
+  }
+  added.sort()
+  removed.sort()
+  changed.sort((x, y) => x.id.localeCompare(y.id))
+  return { added, removed, changed, unchanged }
 }
 
 /** Dashboard counts per domain. */

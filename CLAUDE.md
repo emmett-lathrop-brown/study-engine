@@ -49,7 +49,8 @@ study-log/                       # private
 ## 3. 採点・忘却曲線
 
 - **履歴(事実)**= `reviews.jsonl`(`{id, ts, grade, session}` を末尾追記)。
-- **状態(計算結果)**= `srs/state.json`(`{interval, ease, due, reps, lapses, ...}`)。状態は履歴から再計算できる関係を保つ。
+- **状態(計算結果)**= `srs/state.json`(`{interval, ease, due, reps, lapses, ...}`)。状態は履歴から再計算できる関係を保つ(`state.json` は実質キャッシュ)。
+- **rebuild-state**(`rebuildState()` / `pnpm rebuild-state`): `reviews.jsonl` を `review()` で再生して `state.json` を再計算する**安全網**。スケジューラ数値を変えたり FSRS に移行した後、履歴から状態を作り直せる。**ライブ記録分は fuzz 込みで完全再現**(`record()` が seed 用の日と ts を同一クロックで読むため `day === ts.slice(0,10)`)。`on` 上書き記録や手動注入した状態は再現対象外。`smoke` が「記録した状態 == reviews から再生した状態」を往復検証。
 - **grade**: 1=Again / 2=Hard / 3=Good / 4=Easy。
 - アルゴリズム = **SM-2 を 4 ボタンに適応**(`src/engine/srs.ts`、純関数 `review()`)。後で FSRS 等に差し替え可。
 - single_choice/multi は正誤から**仮 grade を自動ハイライト**(正解→Good、誤り→Again)。最終判断はユーザー。cloze/translation/free は模範解答を見て自己評価。
@@ -115,8 +116,11 @@ study-log/                       # private
 ```
 pnpm install     # 初回(Electron 本体を取得; .npmrc=node-linker=hoisted)
 pnpm dev         # アプリ起動(日々の学習)
-pnpm smoke       # エンジンの headless 検証(SM-2 + pick/record/summary)
-pnpm typecheck   # 型チェック(node 側 + web 側)
+pnpm smoke       # エンジンの headless 検証(SM-2 + pick/record/summary + rebuild-state 往復)
+pnpm typecheck   # 型チェック(node 側 + web 側 + scripts/)
+pnpm rebuild-state          # reviews.jsonl→state.json 再計算(既定 dry-run=差分表示のみ)
+                            #   --write       適用(rebuilt を現状にマージ; 履歴の無い項目は保持)
+                            #   --write --prune  適用(履歴由来の項目だけに置換)/ -v 全件表示
 pnpm build       # 本番ビルド(electron-vite)
 pnpm dist        # .app 生成(electron-builder, dir)
 
