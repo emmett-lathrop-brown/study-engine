@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { DomainInfo, PickedQuestion, SessionSummary, SrsState } from '../engine/types'
+import type { DomainInfo, PickedQuestion, SessionSummary, SrsState, StudyStats } from '../engine/types'
 import type { PickOptions } from '../engine/session'
 
 export interface Settings {
@@ -28,6 +28,7 @@ const api = {
     ipcRenderer.invoke('config:setFontSize', fontSize),
 
   listDomains: (): Promise<DomainInfo[]> => ipcRenderer.invoke('domains:list'),
+  stats: (): Promise<StudyStats> => ipcRenderer.invoke('stats:get'),
   pickSession: (domain: string, opts: PickOptions): Promise<PickedQuestion[]> =>
     ipcRenderer.invoke('session:pick', domain, opts),
   grade: (

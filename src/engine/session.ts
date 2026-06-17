@@ -3,9 +3,10 @@ import type {
   PickedQuestion,
   SessionItem,
   SessionSummary,
-  SrsState
+  SrsState,
+  StudyStats
 } from './types'
-import { defaultState, nowISO, review as srsReview, todayISO } from './srs'
+import { addDays, defaultState, nowISO, review as srsReview, todayISO } from './srs'
 import {
   appendReview,
   domainPrefix,
@@ -117,6 +118,50 @@ export async function domainInfo(root: string): Promise<DomainInfo[]> {
     out.push({ domain, prefix: domainPrefix(domain), total: qs.length, due, new: fresh })
   }
   return out
+}
+
+const MATURE_DAYS = 21 // interval at/above which a card counts as "mature" (Anki convention)
+
+/** Cross-domain study stats for the dashboard: streak, today's count, maturity. */
+export async function studyStats(root: string, on?: string): Promise<StudyStats> {
+  const today = on ?? todayISO()
+  const state = await readState(root)
+  const domains = await listDomains(root)
+  const dayCounts = new Map<string, number>()
+  let totalReviews = 0
+  const maturity = []
+  for (const domain of domains) {
+    for (const r of await readReviews(root, domain)) {
+      const day = r.ts.slice(0, 10) // ts carries the local offset, so this is the local date
+      dayCounts.set(day, (dayCounts.get(day) ?? 0) + 1)
+      totalReviews++
+    }
+    const qs = await listQuestions(root, domain)
+    let unseen = 0
+    let learning = 0
+    let mature = 0
+    for (const q of qs) {
+      const st = state[q.id]
+      if (!st || !st.last_review) unseen++
+      else if (st.interval >= MATURE_DAYS) mature++
+      else learning++
+    }
+    maturity.push({ domain, total: qs.length, unseen, learning, mature })
+  }
+  // Streak: count back from today (or yesterday if today isn't done yet).
+  let streak = 0
+  let cursor = dayCounts.has(today) ? today : addDays(today, -1)
+  while (dayCounts.has(cursor)) {
+    streak++
+    cursor = addDays(cursor, -1)
+  }
+  return {
+    streak,
+    reviewsToday: dayCounts.get(today) ?? 0,
+    totalReviews,
+    reviewedDays: dayCounts.size,
+    maturity
+  }
 }
 
 export async function summary(

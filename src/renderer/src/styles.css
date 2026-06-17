@@ -180,6 +180,80 @@ h1 {
 .controls input {
   width: 64px;
 }
+.controls .check {
+  gap: 6px;
+  cursor: pointer;
+}
+.controls .check input {
+  width: auto;
+}
+
+/* ---------- dashboard stats ---------- */
+.stats-strip {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.stat-pill {
+  flex: 1;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 10px;
+}
+.sp-num {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.sp-lbl {
+  font-size: 11px;
+  color: var(--muted);
+}
+.prep-note {
+  background: var(--panel2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+/* per-domain maturity bar */
+.maturity {
+  margin-bottom: 14px;
+}
+.mat-bar {
+  display: flex;
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--panel2);
+}
+.mat {
+  height: 100%;
+}
+.mat.mature {
+  background: var(--good);
+}
+.mat.learning {
+  background: var(--accent);
+}
+.mat.unseen {
+  background: var(--line);
+}
+.mat-legend {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
 .error {
   background: #3a1d22;
   border: 1px solid var(--again);

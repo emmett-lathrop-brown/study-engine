@@ -3,7 +3,7 @@ import { spawn } from 'child_process'
 import { existsSync, promises as fs, readdirSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { domainInfo, gradeOne, pick, summary } from '../engine/session'
+import { domainInfo, gradeOne, pick, studyStats, summary } from '../engine/session'
 import type { PickOptions } from '../engine/session'
 
 // ---------------------------------------------------------------------------
@@ -263,6 +263,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('domains:list', () => domainInfo(requireRoot()))
+  ipcMain.handle('stats:get', () => studyStats(requireRoot()))
   ipcMain.handle('session:pick', (_e, domain: string, opts: PickOptions) =>
     pick(requireRoot(), domain, opts)
   )

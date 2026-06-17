@@ -52,6 +52,22 @@ export interface DomainInfo {
   new: number
 }
 
+export interface DomainMaturity {
+  domain: string
+  total: number
+  unseen: number // never reviewed (no last_review)
+  learning: number // reviewed, interval < MATURE_DAYS
+  mature: number // interval >= MATURE_DAYS
+}
+
+export interface StudyStats {
+  streak: number // consecutive days with >=1 review, ending today (grace: yesterday)
+  reviewsToday: number
+  totalReviews: number
+  reviewedDays: number // distinct days studied
+  maturity: DomainMaturity[]
+}
+
 export interface SessionItem {
   id: string
   topic: string

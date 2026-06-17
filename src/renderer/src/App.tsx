@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { DomainInfo, PickedQuestion, SessionSummary } from '../../engine/types'
+import type { DomainInfo, PickedQuestion, SessionSummary, StudyStats } from '../../engine/types'
 import { api, Settings, VOICES, ClaudeStatus } from './api'
 import { Session } from './Session'
 import { Summary } from './Summary'
+import { buildLearnQuestions } from './learn'
 
 type View =
   | { k: 'loading' }
@@ -19,10 +20,13 @@ function makeSessionId(d = new Date()): string {
 export default function App(): JSX.Element {
   const [config, setConfig] = useState<Settings | null>(null)
   const [domains, setDomains] = useState<DomainInfo[]>([])
+  const [stats, setStats] = useState<StudyStats | null>(null)
   const [view, setView] = useState<View>({ k: 'loading' })
   const [limit, setLimit] = useState(15)
   const [maxNew, setMaxNew] = useState(8)
+  const [learnMode, setLearnMode] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [preparing, setPreparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [claude, setClaude] = useState<ClaudeStatus | null>(null)
   const [claudeBusy, setClaudeBusy] = useState(false)
@@ -47,7 +51,9 @@ export default function App(): JSX.Element {
       return
     }
     try {
-      setDomains(await api.listDomains())
+      const [d, s] = await Promise.all([api.listDomains(), api.stats()])
+      setDomains(d)
+      setStats(s)
       setView({ k: 'dashboard' })
     } catch (e) {
       setError(String(e))
@@ -85,7 +91,7 @@ export default function App(): JSX.Element {
     setBusy(true)
     setError(null)
     try {
-      const qs = await api.pickSession(domain, { limit, maxNew })
+      let qs = await api.pickSession(domain, { limit, maxNew })
       if (qs.length === 0) {
         // No session could be built (e.g. retried after the due queue drained).
         // Route to the dashboard, which renders `error` — otherwise the message
@@ -93,12 +99,19 @@ export default function App(): JSX.Element {
         setError('出題できる問題がありません(問題ファイルが無い、または全て先の予定)。')
         setView({ k: 'dashboard' })
       } else {
+        if (learnMode) {
+          // Turn free-recall questions into 4-choice (may call Claude for distractors).
+          setPreparing(true)
+          qs = await buildLearnQuestions(qs)
+          setPreparing(false)
+        }
         setView({ k: 'session', domain, sessionId: makeSessionId(), questions: qs })
       }
     } catch (e) {
       setError(String(e))
       setView({ k: 'dashboard' })
     }
+    setPreparing(false)
     setBusy(false)
   }
 
@@ -202,6 +215,27 @@ export default function App(): JSX.Element {
   } else {
     content = (
       <div className="dashboard">
+        {stats && (
+          <div className="stats-strip">
+            <div className="stat-pill">
+              <span className="sp-num">🔥 {stats.streak}</span>
+              <span className="sp-lbl">継続(日)</span>
+            </div>
+            <div className="stat-pill">
+              <span className="sp-num">{stats.reviewsToday}</span>
+              <span className="sp-lbl">今日</span>
+            </div>
+            <div className="stat-pill">
+              <span className="sp-num">{stats.totalReviews}</span>
+              <span className="sp-lbl">総レビュー</span>
+            </div>
+            <div className="stat-pill">
+              <span className="sp-num">{stats.reviewedDays}</span>
+              <span className="sp-lbl">学習日数</span>
+            </div>
+          </div>
+        )}
+
         <div className="controls">
           <label>
             1セッション
@@ -210,6 +244,10 @@ export default function App(): JSX.Element {
           <label>
             うち新規 最大
             <input type="number" min={0} max={50} value={maxNew} onChange={(e) => setMaxNew(Number(e.target.value))} />問
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={learnMode} onChange={(e) => setLearnMode(e.target.checked)} />
+            速習(記述を4択に)
           </label>
         </div>
 
@@ -241,22 +279,39 @@ export default function App(): JSX.Element {
         </div>
 
         {error && <div className="error">{error}</div>}
+        {preparing && <div className="prep-note">速習の選択肢を生成中…</div>}
 
         {domains.length === 0 ? (
           <p className="muted">問題のあるドメインがありません。study-log に問題を追加してください。</p>
         ) : (
           <div className="domain-grid">
-            {domains.map((d) => (
-              <button key={d.domain} className="domain-card" onClick={() => void start(d.domain)} disabled={busy}>
-                <div className="dname">{d.domain}</div>
-                <div className="dcounts">
-                  <span className="due">復習 {d.due}</span>
-                  <span className="new">新規 {d.new}</span>
-                  <span className="total">計 {d.total}</span>
-                </div>
-                <div className="go">セッション開始 →</div>
-              </button>
-            ))}
+            {domains.map((d) => {
+              const m = stats?.maturity.find((x) => x.domain === d.domain)
+              const pct = (n: number): string => (m && m.total ? `${(n / m.total) * 100}%` : '0%')
+              return (
+                <button key={d.domain} className="domain-card" onClick={() => void start(d.domain)} disabled={busy}>
+                  <div className="dname">{d.domain}</div>
+                  <div className="dcounts">
+                    <span className="due">復習 {d.due}</span>
+                    <span className="new">新規 {d.new}</span>
+                    <span className="total">計 {d.total}</span>
+                  </div>
+                  {m && m.total > 0 && (
+                    <div className="maturity">
+                      <div className="mat-bar">
+                        <span className="mat mature" style={{ width: pct(m.mature) }} />
+                        <span className="mat learning" style={{ width: pct(m.learning) }} />
+                        <span className="mat unseen" style={{ width: pct(m.unseen) }} />
+                      </div>
+                      <div className="mat-legend">
+                        習得 {m.mature} ・ 学習中 {m.learning} ・ 未 {m.unseen}
+                      </div>
+                    </div>
+                  )}
+                  <div className="go">セッション開始 →</div>
+                </button>
+              )
+            })}
           </div>
         )}
 

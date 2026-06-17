@@ -5,7 +5,7 @@ import * as os from 'os'
 import * as path from 'path'
 import { review, defaultState, todayISO, addDays } from './srs'
 import { writeState, readState } from './store'
-import { pick, record, summary, domainInfo } from './session'
+import { pick, record, summary, domainInfo, studyStats } from './session'
 
 let failures = 0
 function ok(cond: boolean, msg: string): void {
@@ -99,6 +99,12 @@ async function main(): Promise<void> {
   )
   const againItem = sum.items.find((i) => i.id === 'demo-set-a-0002')
   ok(!!againItem && againItem.grade === 1 && !againItem.correct, 'Again item marked incorrect')
+
+  const stats = await studyStats(root)
+  ok(stats.reviewsToday === 2 && stats.totalReviews === 2, `studyStats counts today's reviews (got ${stats.reviewsToday}/${stats.totalReviews})`)
+  ok(stats.streak === 1 && stats.reviewedDays === 1, `studyStats streak/days (got ${stats.streak}/${stats.reviewedDays})`)
+  const dm = stats.maturity.find((m) => m.domain === 'demo/set')
+  ok(!!dm && dm.total === 3 && dm.unseen === 1 && dm.learning === 2, `maturity split (got ${dm?.unseen} unseen / ${dm?.learning} learning)`)
 
   await fs.rm(root, { recursive: true, force: true })
 

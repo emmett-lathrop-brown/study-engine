@@ -1,4 +1,4 @@
-import type { DomainInfo, PickedQuestion, SessionSummary, SrsState } from '../../engine/types'
+import type { DomainInfo, PickedQuestion, SessionSummary, SrsState, StudyStats } from '../../engine/types'
 
 export interface PickOptions {
   limit?: number
@@ -38,6 +38,7 @@ export interface StudyApi {
   setVoice(voice: string, rate: number): Promise<Settings>
   setFontSize(fontSize: number): Promise<Settings>
   listDomains(): Promise<DomainInfo[]>
+  stats(): Promise<StudyStats>
   pickSession(domain: string, opts: PickOptions): Promise<PickedQuestion[]>
   grade(domain: string, session: string, id: string, grade: number): Promise<{ id: string; state: SrsState }>
   summary(domain: string, session: string): Promise<SessionSummary>
