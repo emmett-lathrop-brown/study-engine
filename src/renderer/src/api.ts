@@ -1,4 +1,6 @@
 import type {
+  ChatLog,
+  ChatMessage,
   DomainInfo,
   ExportResult,
   PickedQuestion,
@@ -21,16 +23,6 @@ export interface Settings {
   fontSize: number
   autoSpeak: boolean
 }
-export interface DeepDiveArgs {
-  id: string
-  file: string
-  domain: string
-  q: string
-  answer: string
-  userAnswer?: string
-  gradeLabel?: string
-}
-
 export interface ClaudeStatus {
   installed: boolean
   connected: boolean
@@ -57,11 +49,13 @@ export interface StudyApi {
   stopSpeak(): Promise<void>
   commit(message: string): Promise<{ ok: boolean; out: string }>
   exportMarkdown(): Promise<ExportResult[]>
-  deepDivePrompt(a: DeepDiveArgs): Promise<string>
+  getChat(domain: string, id: string): Promise<ChatLog | null>
+  saveChat(domain: string, id: string, messages: ChatMessage[]): Promise<void>
   copyToClipboard(text: string): Promise<void>
   openExternal(url: string): Promise<void>
   claudeStatus(): Promise<ClaudeStatus>
   claudeAsk(prompt: string, model?: string): Promise<AskResult>
+  claudeChat(message: string, model?: string): Promise<AskResult>
   claudeLogin(): Promise<{ ok: boolean; detail: string }>
 }
 

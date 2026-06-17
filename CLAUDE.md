@@ -26,6 +26,7 @@ study-log/                       # private
     questions/  *.json           # 1問1ファイル(構造化 JSON オブジェクト)
     learned/    *.md             # 第2の脳(人が肉付けする散文だけ md)
     logs/       reviews.jsonl    # 回答履歴(追記型 JSON Lines)
+    chats/      <id>.json        # 問題ごとの Claude チャット履歴(アプリ内チャット。md書き出しに同梱)
   srs/state.json                 # 全問の SM-2 状態(ID基準・グローバル)
 ```
 
@@ -58,7 +59,7 @@ study-log/                       # private
 1. アプリ起動(`pnpm dev`)。ダッシュボードで対象ドメインを選ぶ。
 2. `pick`: `state.json` から `due <= 今日` を**復習優先**で抽出 + 新規を数問混ぜ計 10〜20 問。
 3. 1 問ずつ出題 → 回答 →(`single_choice` は**選択肢クリック/A–Dキーで即フィードバック**=Quizlet流。`multi` は複数選んでから確定、記述は Cmd+Enter で「答え合わせ」)→ 正解+解説 → **4 段階で自己評価**(1〜4 キー or クリック)。
-4. 学習中に **💡ヒント**(`hint` があれば即表示、無ければ Claude が答えを伏せて生成)/ **🤔深掘り**(Claude が理解重視の解説をアプリ内表示)を任意で呼べる。
+4. 学習中に **💡ヒント**(`hint` があれば即表示、無ければ Claude が答えを伏せて生成)/ **💬チャット**(右パネル。今の問題を文脈にマルチターン会話、問題 ID 単位で保存=§7)を任意で呼べる。
 5. `speak` のある問題は 🔊 で読み上げ(`say`)。
 6. 各回答ごとに `reviews.jsonl` 追記 + `state.json` 更新(クラッシュ耐性)。
 7. セッション終了でサマリ(正答率・弱点トピック)→ **「コミット & プッシュ」で study-log に 1 コミット**。
@@ -81,23 +82,14 @@ study-log/                       # private
 - `learned/` は問題生成時の**参照元**にもなる(既習を踏まえた出題)。
 - 昇格判断 = Claude の提案 + 本人の最終判断。コミットは Claude/アプリに一本化(Obsidian の自動コミット系は使わない)。
 
-## 7. 深掘り・ヒント(Claude 連携)
+## 7. ヒント・チャット(Claude 連携)
 
-経路は 2 つ。役割が違うので両方残す:
+すべてアプリ内で完結。認証は既存の Claude Code ログイン共有(キーチェーン)で、アプリは API キーを保存しない。`claude` CLI を headless print モード(`-p --output-format json --max-turns 1`・`cwd` は temp・ツール無し=ファイル読み書きなし)で叩く(`src/main/index.ts` の `claudeAsk`)。
 
-**A. アプリ内・即席(one-shot)** — `src/main/index.ts` の `claudeAsk` が `claude` CLI を headless print モード(`-p --output-format json --max-turns 1`)で叩く。認証は既存の Claude Code ログイン共有(キーチェーン)。アプリは API キーを一切保存しない。
-- **💡ヒント**: `hint` があれば即表示、無ければ Claude(haiku)が**答えを伏せた**ヒントを生成。
-- **🤔深掘り**: Claude(sonnet)が理解重視の解説をアプリ内に表示。
-- one-shot なのでファイルは読み書きしない(`cwd` は temp)。手早く 1 問の理解を深める用途。
+- **💡ヒント**(出題前): `hint` があれば即表示、無ければ Claude(haiku)が**答えを伏せた**ヒントを1つ生成。
+- **💬チャット**(セッション右パネル, Claude(sonnet)): その問題を文脈に渡したマルチターン会話。理解の掘り下げ・つまずき相談に使う。会話は**問題 ID に紐づけて** `<domain>/chats/<id>.json` に保存され、開き直すと復元、md 書き出しにも同梱される(`ChatPanel` → `chat:get`/`chat:save` → `store.readChat`/`writeChat`)。会話継続は CLI の `--resume` ではなく**保存済み transcript を毎回文脈として送る**方式(再起動耐性・ログから再現可能)。
 
-**B. Claude Code チャット連携(`learned/` 育成の本番経路)** — アプリの「📋 Claude Codeへコピー」が問題 ID・ファイルパス・回答を載せたプロンプト(`deepDivePrompt`)をクリップボードへ。ユーザーがそれを Claude Code チャットに貼ったら、Claude は:
-
-1. 該当 `questions/*.json` を読む。
-2. 関連サービス/語法との違い・よくある誤解・試験/実運用での問われ方の観点で掘り下げる。
-3. 腹落ちしたら `learned/` への追記案を出す(本人の言葉ベース、丸写ししない)。
-4. 必要なら関連問題を追加生成して `questions/` に足す。
-
-> A はアプリ内で完結する素早い理解補助、B はファイル(`learned/` ・`questions/`)を育てる本番。`learned/` を増やすのは **B のみ**(A の one-shot はファイルを触れない)。
+> アプリ内チャットは sandboxed(temp cwd・ツール無し)なので**ファイルは書けない**。`learned/`(第2の脳)を育てたいときは、別途 **Claude Code チャットを直接開いて** `questions/*.json` を読ませ、関連知識・誤解・問われ方を掘り下げ → `learned/` 追記案(本人の言葉ベース、丸写し禁止)→ 必要なら `questions/` に関連問題を追加、という運用。`learned/` を増やすのはこの経路のみ。
 
 ## 8. ドメイン追加手順(AWS・英語以外を増やす)
 

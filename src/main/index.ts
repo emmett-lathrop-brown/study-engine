@@ -6,6 +6,8 @@ import { join } from 'path'
 import { domainInfo, gradeOne, pick, studyStats, summary } from '../engine/session'
 import type { PickOptions } from '../engine/session'
 import { exportMarkdown } from '../engine/export'
+import { readChat, writeChat } from '../engine/store'
+import type { ChatMessage } from '../engine/types'
 
 // ---------------------------------------------------------------------------
 // Config (study-log path + TTS voice) persisted in userData/settings.json
@@ -115,36 +117,6 @@ async function commit(message: string): Promise<{ ok: boolean; out: string }> {
 }
 
 // ---------------------------------------------------------------------------
-// deep-dive prompt for Claude Code chat (copied to clipboard by renderer)
-// ---------------------------------------------------------------------------
-interface DeepDiveArgs {
-  id: string
-  file: string
-  domain: string
-  q: string
-  answer: string
-  userAnswer?: string
-  gradeLabel?: string
-}
-function deepDivePrompt(a: DeepDiveArgs): string {
-  return [
-    `study-log の問題「${a.id}」を深掘りしたい。`,
-    `ファイル: ${a.file}`,
-    `ドメイン: ${a.domain}`,
-    ``,
-    `問題: ${a.q}`,
-    `正解/模範解答: ${a.answer}`,
-    a.userAnswer ? `私の回答: ${a.userAnswer}` : ``,
-    a.gradeLabel ? `自己評価: ${a.gradeLabel}` : ``,
-    ``,
-    `この概念を、関連サービス/語法との違い・よくある誤解・試験(または実運用)での問われ方の観点で掘り下げて解説して。`,
-    `腹落ちしたら、要点を私の言葉ベースで learned/ に追記する案も出して。`
-  ]
-    .filter((l) => l !== ``)
-    .join('\n')
-}
-
-// ---------------------------------------------------------------------------
 // Claude Code integration (self-contained): the app shells out to the `claude`
 // CLI in headless print mode. Auth is shared with the user's existing Claude
 // Code login (macOS keychain); `setup-token` opens an OAuth URL when missing.
@@ -179,7 +151,13 @@ interface AskResult {
   error?: string
 }
 
-function claudeAsk(prompt: string, model?: string): Promise<AskResult> {
+// One-shot call to the `claude` CLI in headless print mode. Sandboxed: cwd is the
+// app temp dir and no tools/files are exposed — pure Q&A over the prompt, auth
+// shared with the user's existing login. The in-app chat builds on this by
+// resending a self-contained transcript each turn (it does NOT use session
+// resume), so a conversation is reproducible from its persisted log and survives
+// restarts.
+function claudeAsk(message: string, model?: string): Promise<AskResult> {
   const bin = resolveClaudeBin()
   if (!bin) return Promise.resolve({ ok: false, error: 'claude CLI が見つかりません(未導入)。' })
   return new Promise((resolve) => {
@@ -207,7 +185,7 @@ function claudeAsk(prompt: string, model?: string): Promise<AskResult> {
         resolve({ ok: false, error: (err || out || 'claude の応答を解析できませんでした').slice(0, 300) })
       }
     })
-    child.stdin.write(prompt)
+    child.stdin.write(message)
     child.stdin.end()
   })
 }
@@ -304,13 +282,18 @@ function registerIpc(): void {
     }
   })
   ipcMain.handle('export:md', () => exportMarkdown(requireRoot()))
+  ipcMain.handle('chat:get', (_e, domain: string, id: string) => readChat(requireRoot(), domain, id))
+  ipcMain.handle('chat:save', (_e, domain: string, id: string, messages: ChatMessage[]) =>
+    writeChat(requireRoot(), domain, id, messages)
+  )
   ipcMain.handle('git:commit', (_e, message: string) => commit(message))
-  ipcMain.handle('deepdive:prompt', (_e, a: DeepDiveArgs) => deepDivePrompt(a))
   ipcMain.handle('clipboard:write', (_e, text: string) => clipboard.writeText(text))
   ipcMain.handle('open:external', (_e, url: string) => shell.openExternal(url))
 
   ipcMain.handle('claude:status', () => claudeStatus())
   ipcMain.handle('claude:ask', (_e, prompt: string, model?: string) => claudeAsk(prompt, model))
+  // Chat shares the one-shot core; the renderer resends a self-contained transcript.
+  ipcMain.handle('claude:chat', (_e, message: string, model?: string) => claudeAsk(message, model))
   ipcMain.handle('claude:login', () => claudeLogin(BrowserWindow.getAllWindows()[0] ?? null))
 }
 

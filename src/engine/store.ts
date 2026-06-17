@@ -1,10 +1,11 @@
 import { promises as fs, existsSync } from 'fs'
 import * as path from 'path'
-import type { Question, QType, Review, RubyPair, StateMap } from './types'
+import type { ChatLog, ChatMessage, Question, QType, Review, RubyPair, StateMap } from './types'
 
 // Storage layer over the private study-log repo:
 //   <root>/<domain>/questions/*.json   one question per file (structured source of truth)
 //   <root>/<domain>/logs/reviews.jsonl append-only answer history
+//   <root>/<domain>/chats/<id>.json    per-question Claude chat transcript
 //   <root>/srs/state.json              global SM-2 state, keyed by question id
 // Human/Obsidian-facing markdown is produced on demand by the exporter, not stored here.
 
@@ -118,6 +119,67 @@ export async function appendReview(root: string, domain: string, r: Review): Pro
   const p = path.join(root, domain, 'logs', 'reviews.jsonl')
   await fs.mkdir(path.dirname(p), { recursive: true })
   await fs.appendFile(p, JSON.stringify(r) + '\n', 'utf8')
+}
+
+// Filesystem-safe, unicode-aware id base. Shared with the exporter so a question's
+// chat file and its exported note are keyed identically. Critically, it strips path
+// separators, so a crafted question id can never escape its directory.
+export const safeBase = (id: string): string => id.replace(/[^\p{L}\p{N}._-]/gu, '_')
+
+// --- per-question chat transcripts -----------------------------------------
+function chatPath(root: string, domain: string, id: string): string {
+  const p = path.join(root, domain, 'chats', `${safeBase(id)}.json`)
+  // Defense-in-depth: even with safeBase on the id, a crafted `domain` (e.g.
+  // carrying '..' segments) must not let the path resolve outside the root.
+  if (path.relative(root, p).split(path.sep)[0] === '..') {
+    throw new Error(`refusing chat path outside study-log: ${domain}/${id}`)
+  }
+  return p
+}
+
+// Keep only well-formed turns. Applied symmetrically on read AND write so only
+// shaped {role, text, ts} transcripts ever hit disk (the renderer payload is
+// untrusted) and a partially-corrupt file degrades gracefully on load.
+function normalizeMessages(arr: unknown): ChatMessage[] {
+  if (!Array.isArray(arr)) return []
+  return arr
+    .filter(
+      (m): m is ChatMessage =>
+        !!m &&
+        ((m as ChatMessage).role === 'user' || (m as ChatMessage).role === 'assistant') &&
+        typeof (m as ChatMessage).text === 'string'
+    )
+    .map((m) => ({ role: m.role, text: m.text, ts: typeof m.ts === 'string' ? m.ts : '' }))
+}
+
+/** Load a question's saved chat (null if none yet). Tolerant of malformed rows. */
+export async function readChat(root: string, domain: string, id: string): Promise<ChatLog | null> {
+  try {
+    const d = JSON.parse(await fs.readFile(chatPath(root, domain, id), 'utf8')) as Partial<ChatLog>
+    return { id, domain, messages: normalizeMessages(d.messages) }
+  } catch {
+    return null
+  }
+}
+
+/** Persist a question's whole chat thread (atomic). An empty thread removes the file. */
+export async function writeChat(
+  root: string,
+  domain: string,
+  id: string,
+  messages: ChatMessage[]
+): Promise<void> {
+  const p = chatPath(root, domain, id)
+  const clean = normalizeMessages(messages)
+  if (clean.length === 0) {
+    await fs.rm(p, { force: true }) // "clear" truly removes the artifact (no empty residue)
+    return
+  }
+  await fs.mkdir(path.dirname(p), { recursive: true })
+  const log: ChatLog = { id, domain, messages: clean }
+  const tmp = `${p}.tmp`
+  await fs.writeFile(tmp, JSON.stringify(log, null, 2) + '\n', 'utf8')
+  await fs.rename(tmp, p)
 }
 
 export async function readReviews(root: string, domain: string): Promise<Review[]> {

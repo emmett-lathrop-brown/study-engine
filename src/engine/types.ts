@@ -44,6 +44,21 @@ export interface Review {
   session: string
 }
 
+// One turn in a per-question Claude chat. Stored transcript-style so the
+// conversation survives app restarts and can be re-exported to Obsidian md.
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  ts: string // ISO8601
+}
+
+// A question's whole chat thread, persisted at <domain>/chats/<id>.json.
+export interface ChatLog {
+  id: string // question id this conversation is attached to
+  domain: string
+  messages: ChatMessage[]
+}
+
 export interface PickedQuestion extends Question {
   state: SrsState
   isNew: boolean

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import * as path from 'path'
-import type { ExportResult, Question } from './types'
-import { listDomains, listQuestions } from './store'
+import type { ChatLog, ExportResult, Question } from './types'
+import { listDomains, listQuestions, readChat, safeBase } from './store'
 
 // Obsidian-friendly Markdown export of the questions. The JSON under
 // questions/ stays the source of truth; this writes a sibling export/ folder
@@ -21,18 +21,14 @@ const foldControls = (s: string): string =>
 const yamlStr = (s: string): string =>
   `"${foldControls(s.replace(/\\/g, '\\\\').replace(/"/g, '\\"'))}"`
 
-// Filesystem-safe note name; unicode-aware so distinct CJK / accented ids
-// (the engine is domain-generic) don't collapse to the same file.
-const safeBase = (id: string): string => id.replace(/[^\p{L}\p{N}._-]/gu, '_')
-
 function titleOf(q: Question): string {
   const head = q.q.split('\n')[0].replace(/[:：]\s*$/, '').trim()
   const t = head.length > 60 ? `${head.slice(0, 57)}…` : head
   return t || q.id
 }
 
-/** One question → an Obsidian note (frontmatter + question/answer/explanation). */
-export function questionToMarkdown(q: Question): string {
+/** One question → an Obsidian note (frontmatter + question/answer/explanation [+ chat]). */
+export function questionToMarkdown(q: Question, chat?: ChatLog | null): string {
   const tags = ['study', q.domain, q.topic].filter(Boolean)
   const fm = [
     '---',
@@ -55,6 +51,13 @@ export function questionToMarkdown(q: Question): string {
   body.push('## 解答', q.answer, '')
   if (q.explanation) body.push('## 解説', q.explanation, '')
   if (q.hint) body.push('## ヒント', q.hint, '')
+  if (chat && chat.messages.length) {
+    body.push('## Claude チャット', '')
+    for (const m of chat.messages) {
+      // Label on its own line so multi-line / markdown message bodies survive.
+      body.push(`**${m.role === 'user' ? '私' : 'Claude'}:**`, '', m.text, '')
+    }
+  }
   return `${fm.join('\n')}\n${body.join('\n').trimEnd()}\n`
 }
 
@@ -81,7 +84,8 @@ export async function exportMarkdown(root: string): Promise<ExportResult[]> {
       }
     }
     for (const q of qs) {
-      await fs.writeFile(path.join(dir, `${safeBase(q.id)}.md`), questionToMarkdown(q), 'utf8')
+      const chat = await readChat(root, domain, q.id)
+      await fs.writeFile(path.join(dir, `${safeBase(q.id)}.md`), questionToMarkdown(q, chat), 'utf8')
     }
     out.push({ domain, count: qs.length, dir })
   }

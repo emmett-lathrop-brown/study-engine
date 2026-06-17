@@ -13,7 +13,7 @@ import {
   INTERVAL_MAX,
   LEECH_LAPSES
 } from './srs'
-import { writeState, readState } from './store'
+import { writeState, readState, readChat, writeChat } from './store'
 import { pick, record, summary, domainInfo, studyStats } from './session'
 import { exportMarkdown } from './export'
 
@@ -168,6 +168,30 @@ async function main(): Promise<void> {
   await record(root, 'demo/set', leechSess, [{ id: 'demo-set-b-0001', grade: 3 }])
   const lsum = await summary(root, 'demo/set', leechSess)
   ok(lsum.items[0]?.leech === true, 'summary item carries leech flag for chronically-missed card')
+
+  // --- per-question chat persistence + md export ------------------------
+  await writeChat(root, 'demo/set', 'demo-set-a-0001', [
+    { role: 'user', text: 'なぜ A が正解？', ts: `${today}T10:00:00+09:00` },
+    { role: 'assistant', text: '**A** が正解です。理由は…', ts: `${today}T10:00:03+09:00` }
+  ])
+  const chat = await readChat(root, 'demo/set', 'demo-set-a-0001')
+  ok(
+    !!chat && chat.messages.length === 2 && chat.messages[0].role === 'user',
+    `chat round-trips to chats/<id>.json (got ${chat?.messages.length})`
+  )
+  ok((await readChat(root, 'demo/set', 'no-such-id')) === null, 'missing chat -> null')
+  await exportMarkdown(root) // re-export now that a chat exists
+  const chatMd = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  ok(
+    chatMd.includes('## Claude チャット') && chatMd.includes('なぜ A が正解？'),
+    'exported md embeds the chat transcript'
+  )
+  // Clearing (writing an empty thread) removes the file and drops the md section.
+  await writeChat(root, 'demo/set', 'demo-set-a-0001', [])
+  ok((await readChat(root, 'demo/set', 'demo-set-a-0001')) === null, 'cleared chat removes the file')
+  await exportMarkdown(root)
+  const clearedMd = await fs.readFile(path.join(root, 'demo', 'set', 'export', 'demo-set-a-0001.md'), 'utf8')
+  ok(!clearedMd.includes('## Claude チャット'), 'no chat -> no chat section in exported md')
 
   await fs.rm(root, { recursive: true, force: true })
 

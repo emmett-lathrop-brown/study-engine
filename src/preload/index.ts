@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  ChatLog,
+  ChatMessage,
   DomainInfo,
   ExportResult,
   PickedQuestion,
@@ -15,16 +17,6 @@ export interface Settings {
   rate: number
   fontSize: number
   autoSpeak: boolean
-}
-
-export interface DeepDiveArgs {
-  id: string
-  file: string
-  domain: string
-  q: string
-  answer: string
-  userAnswer?: string
-  gradeLabel?: string
 }
 
 const api = {
@@ -56,7 +48,10 @@ const api = {
   commit: (message: string): Promise<{ ok: boolean; out: string }> =>
     ipcRenderer.invoke('git:commit', message),
   exportMarkdown: (): Promise<ExportResult[]> => ipcRenderer.invoke('export:md'),
-  deepDivePrompt: (a: DeepDiveArgs): Promise<string> => ipcRenderer.invoke('deepdive:prompt', a),
+  getChat: (domain: string, id: string): Promise<ChatLog | null> =>
+    ipcRenderer.invoke('chat:get', domain, id),
+  saveChat: (domain: string, id: string, messages: ChatMessage[]): Promise<void> =>
+    ipcRenderer.invoke('chat:save', domain, id, messages),
   copyToClipboard: (text: string): Promise<void> => ipcRenderer.invoke('clipboard:write', text),
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('open:external', url),
 
@@ -64,6 +59,8 @@ const api = {
     ipcRenderer.invoke('claude:status'),
   claudeAsk: (prompt: string, model?: string): Promise<{ ok: boolean; text?: string; error?: string }> =>
     ipcRenderer.invoke('claude:ask', prompt, model),
+  claudeChat: (message: string, model?: string): Promise<{ ok: boolean; text?: string; error?: string }> =>
+    ipcRenderer.invoke('claude:chat', message, model),
   claudeLogin: (): Promise<{ ok: boolean; detail: string }> => ipcRenderer.invoke('claude:login')
 }
 

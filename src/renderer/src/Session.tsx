@@ -3,6 +3,7 @@ import type { PickedQuestion } from '../../engine/types'
 import { review, todayISO } from '../../engine/srs'
 import { api } from './api'
 import { Markdown } from './Markdown'
+import { ChatPanel } from './ChatPanel'
 
 const intervalLabel = (days: number): string => (days <= 0 ? '今日' : `${days}日`)
 
@@ -80,15 +81,13 @@ export function Session({
   onDone
 }: Props): JSX.Element {
   const [index, setIndex] = useState(0)
+  const [chatOpen, setChatOpen] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [selection, setSelection] = useState<string[]>([])
   const [text, setText] = useState('')
   const [recording, setRecording] = useState(false)
   const [hintText, setHintText] = useState<string | null>(null)
   const [hintLoading, setHintLoading] = useState(false)
-  const [dive, setDive] = useState<string | null>(null)
-  const [diveLoading, setDiveLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
   const [idCopied, setIdCopied] = useState(false)
   const [repoBase, setRepoBase] = useState<string | null>(null)
   const [shownId, setShownId] = useState(questions[0]?.id ?? '')
@@ -111,9 +110,6 @@ export function Session({
     setText('')
     setHintText(null)
     setHintLoading(false)
-    setDive(null)
-    setDiveLoading(false)
-    setCopied(false)
     setIdCopied(false)
   }
 
@@ -194,6 +190,9 @@ export function Session({
 
   useEffect(() => {
     const h = (e: KeyboardEvent): void => {
+      // Keystrokes inside the chat panel belong to the chat, never the question
+      // card (so Enter sends the chat instead of also revealing/grading).
+      if ((e.target as HTMLElement)?.closest?.('.chat-panel')) return
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'TEXTAREA' || tag === 'INPUT') {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !revealed) {
@@ -273,54 +272,6 @@ export function Session({
     setHintText(r.ok ? (r.text ?? '') : `取得失敗: ${r.error ?? ''}`)
   }
 
-  // Deep dive: ask Claude for understanding-oriented explanation, shown in-app.
-  const deepDive = async (): Promise<void> => {
-    if (dive || diveLoading) {
-      setDive(null)
-      return
-    }
-    const userAns = (choice ? selection.join(',') : text).trim()
-    const wrong = choice && revealed ? isCorrect === false : false
-    setDiveLoading(true)
-    const r = await api.claudeAsk(
-      [
-        'あなたは学習コーチです。次の問題を、丸暗記ではなく理解を促す方針で、日本語でわかりやすく深掘り解説してください。要点は見出しや箇条書きを使って読みやすくしてください。',
-        `ドメイン: ${domain}`,
-        `問題: ${q.q}`,
-        choice && q.choices && q.choices.length ? `選択肢:\n${q.choices.join('\n')}` : '',
-        `模範解答: ${q.answer}`,
-        q.explanation ? `既存の解説(これを踏まえ、繰り返しより深掘り・補足を): ${q.explanation}` : '',
-        userAns ? `学習者の回答: ${userAns}` : '',
-        wrong
-          ? 'この回答は不正解でした。なぜ誤りか・正解とどう違うか・つまずきの原因を具体的に指摘してください。'
-          : '',
-        '観点: 関連知識 / つまずきやすい点 / 覚え方。'
-      ]
-        .filter(Boolean)
-        .join('\n'),
-      'sonnet'
-    )
-    setDiveLoading(false)
-    setDive(r.ok ? (r.text ?? '') : `取得失敗: ${r.error ?? ''}`)
-  }
-
-  // Copy a rich deep-dive prompt for a full Claude Code chat session — the
-  // path that can read the file and grow learned/ (the in-app 🤔 is one-shot
-  // and can't write files). See study-engine CLAUDE.md §7.
-  const copyForChat = async (): Promise<void> => {
-    const userAns = choice ? selection.join(',') : text
-    const prompt = await api.deepDivePrompt({
-      id: q.id,
-      file: q.file,
-      domain,
-      q: q.q,
-      answer: q.answer,
-      userAnswer: userAns || undefined
-    })
-    await api.copyToClipboard(prompt)
-    setCopied(true)
-  }
-
   const canReveal = choice ? selection.length > 0 : true
   // Deep link to this question's source JSON on GitHub (study-log repo).
   const ghUrl = repoBase ? `${repoBase}/${q.domain}/questions/${q.file.split('/').pop()}` : null
@@ -335,7 +286,7 @@ export function Session({
   )
 
   return (
-    <div className="session">
+    <div className={`session${chatOpen ? ' with-chat' : ''}`}>
       <header className="session-head">
         <button className="link" onClick={onDone}>
           ✕ 中断
@@ -346,9 +297,18 @@ export function Session({
         <span className="counter">
           {index + 1} / {questions.length}
         </span>
+        <button
+          className={`chat-toggle${chatOpen ? ' on' : ''}`}
+          onClick={() => setChatOpen((o) => !o)}
+          title="Claude とチャット（この問題が文脈として渡ります）"
+        >
+          💬 チャット
+        </button>
       </header>
 
-      <div className="card">
+      <div className="session-body">
+        <div className="session-main">
+          <div className="card">
         <div className="meta">
           <div className="meta-row">
             {q.isNew ? <span className="pill new">NEW</span> : <span className="pill due">復習</span>}
@@ -429,9 +389,6 @@ export function Session({
             <button className="ghost-btn" onClick={onHint} disabled={hintLoading}>
               💡 ヒント
             </button>
-            <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
-              🤔 深掘り
-            </button>
           </div>
         ) : (
           <div className="reveal">
@@ -489,23 +446,18 @@ export function Session({
                 </button>
               ))}
             </div>
-            <div className="actions">
-              <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
-                🤔 深掘り
-              </button>
-              <button className="ghost-btn" onClick={copyForChat} title="learned/ を育てる深掘りプロンプトをコピー">
-                📋 Claude Codeへ
-              </button>
-              {copied && <span className="answer-hint">コピーしました(Claude Code チャットに貼り付け)</span>}
-            </div>
           </div>
         )}
-
-        {(diveLoading || dive) && (
-          <div className="dive-panel">
-            <div className="dive-head">🤔 深掘り{diveLoading ? ' …考え中' : ''}</div>
-            {dive && <Markdown className="dive-body">{dive}</Markdown>}
           </div>
+        </div>
+        {chatOpen && (
+          <ChatPanel
+            key={q.id}
+            domain={domain}
+            q={q}
+            userAnswer={choice ? selection.join(',') : text.trim()}
+            onClose={() => setChatOpen(false)}
+          />
         )}
       </div>
     </div>
