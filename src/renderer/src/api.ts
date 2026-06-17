@@ -9,6 +9,7 @@ export interface Settings {
   root: string | null
   voice: string
   rate: number
+  fontSize: number
 }
 export interface DeepDiveArgs {
   id: string
@@ -35,6 +36,7 @@ export interface StudyApi {
   getConfig(): Promise<Settings>
   pickRoot(): Promise<Settings>
   setVoice(voice: string, rate: number): Promise<Settings>
+  setFontSize(fontSize: number): Promise<Settings>
   listDomains(): Promise<DomainInfo[]>
   pickSession(domain: string, opts: PickOptions): Promise<PickedQuestion[]>
   grade(domain: string, session: string, id: string, grade: number): Promise<{ id: string; state: SrsState }>

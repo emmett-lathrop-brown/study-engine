@@ -69,6 +69,18 @@ export default function App(): JSX.Element {
     setConfig(await api.setVoice(voice, rate))
   }
 
+  const setFontSize = async (fontSize: number): Promise<void> => {
+    setConfig(await api.setFontSize(fontSize))
+  }
+
+  // Drive content scale off the persisted font size (used by the question body,
+  // choices and answer input via the --q-size CSS variable).
+  useEffect(() => {
+    if (config?.fontSize) {
+      document.documentElement.style.setProperty('--q-size', `${config.fontSize}px`)
+    }
+  }, [config?.fontSize])
+
   const start = async (domain: string): Promise<void> => {
     setBusy(true)
     setError(null)
@@ -123,6 +135,25 @@ export default function App(): JSX.Element {
               value={config.rate}
               onChange={(e) => void setVoice(config.voice, Number(e.target.value))}
             />
+          </label>
+          <label className="font-ctl">
+            文字 {config.fontSize}
+            <button
+              className="icon"
+              title="文字を小さく"
+              onClick={() => void setFontSize(config.fontSize - 2)}
+              disabled={config.fontSize <= 16}
+            >
+              A−
+            </button>
+            <button
+              className="icon"
+              title="文字を大きく"
+              onClick={() => void setFontSize(config.fontSize + 2)}
+              disabled={config.fontSize >= 30}
+            >
+              A＋
+            </button>
           </label>
           <button
             className="icon"

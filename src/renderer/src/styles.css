@@ -11,6 +11,7 @@
   --again: #ef5f6b;
   --easy: #6fb1ff;
   --new: #b07cff;
+  --q-size: 20px; /* question-body font size; overridden from settings.fontSize */
 }
 
 * {
@@ -144,6 +145,18 @@ h1 {
   align-items: center;
   gap: 6px;
 }
+.font-ctl {
+  gap: 4px;
+}
+.font-ctl .icon {
+  padding: 3px 7px;
+  font-size: 12px;
+  min-width: 28px;
+}
+.font-ctl .icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .cfg select,
 .controls input {
   background: var(--panel2);
@@ -228,7 +241,7 @@ h1 {
 
 /* ---------- session ---------- */
 .session {
-  max-width: 760px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 20px 24px 60px;
 }
@@ -288,11 +301,25 @@ h1 {
   color: var(--easy);
   border-color: var(--easy);
 }
-.q {
-  font-size: 20px;
-  line-height: 1.55;
-  margin: 6px 0 22px;
+/* Question = instruction (A, muted task label) + body (B, prominent block). */
+.q-instruction {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 2px 0 12px;
   white-space: pre-wrap;
+}
+.q-body {
+  font-size: var(--q-size);
+  font-weight: 600;
+  line-height: 1.6;
+  margin: 0 0 22px;
+  padding: 16px 20px;
+  white-space: pre-wrap;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
 }
 .speak-ctl {
   display: inline-flex;
@@ -461,7 +488,7 @@ h1 {
   border-radius: 12px;
   padding: 16px 18px;
   color: var(--text);
-  font-size: 16px;
+  font-size: calc(var(--q-size) - 4px);
   white-space: pre-wrap;
   transition: border-color 0.12s, transform 0.05s, background 0.12s;
 }
@@ -489,7 +516,7 @@ h1 {
   border-radius: 11px;
   padding: 13px 16px;
   color: var(--text);
-  font-size: 15px;
+  font-size: calc(var(--q-size) - 4px);
   resize: vertical;
 }
 .actions {

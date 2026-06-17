@@ -26,6 +26,19 @@ const correctLetters = (answer: string): string[] =>
 
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// English (cloze/translation) prompts are "<instruction>\n<sentence>"; AWS
+// choice questions are a single block. Split on the first newline so the
+// instruction (A) and the sentence/body (B) can be styled distinctly, and drop
+// a trailing colon from the instruction (it reads as a separator otherwise).
+const splitPrompt = (raw: string): { instruction: string | null; body: string } => {
+  const nl = raw.indexOf('\n')
+  if (nl === -1) return { instruction: null, body: raw.trim() }
+  const head = raw.slice(0, nl).replace(/[:：]\s*$/, '').trim()
+  const rest = raw.slice(nl + 1).trim()
+  if (!rest) return { instruction: null, body: head }
+  return { instruction: head || null, body: rest }
+}
+
 interface Props {
   domain: string
   sessionId: string
@@ -50,6 +63,7 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
   const q = questions[index]
   const choice = isChoiceType(q.type)
   const correct = useMemo(() => correctLetters(q.answer), [q.answer])
+  const prompt = useMemo(() => splitPrompt(q.q), [q.q])
 
   const speakInPrompt =
     Boolean(q.speak) && norm(q.speak ?? '').length > 8 && norm(q.q).includes(norm(q.speak ?? ''))
@@ -149,8 +163,17 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
       return
     }
     setHintLoading(true)
+    const userDraft = !choice ? text.trim() : ''
     const r = await api.claudeAsk(
-      `次の学習問題のヒントを1つだけ、答えそのものは言わず、日本語で簡潔に出して。\n問題: ${q.q}`,
+      [
+        'あなたは学習コーチです。次の問題について、答えそのものは絶対に言わず、解くための着眼点となるヒントを1つだけ日本語で簡潔に出してください。',
+        `ドメイン: ${domain}`,
+        `問題: ${q.q}`,
+        choice && q.choices && q.choices.length ? `選択肢:\n${q.choices.join('\n')}` : '',
+        userDraft ? `学習者の途中回答: ${userDraft}\n(的外れなら、正否は言わず軌道修正の方向だけ示す)` : ''
+      ]
+        .filter(Boolean)
+        .join('\n'),
       'haiku'
     )
     setHintLoading(false)
@@ -163,15 +186,22 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
       setDive(null)
       return
     }
-    const userAns = choice ? selection.join(',') : text
+    const userAns = (choice ? selection.join(',') : text).trim()
+    const wrong = choice && revealed ? isCorrect === false : false
     setDiveLoading(true)
     const r = await api.claudeAsk(
       [
-        'あなたは学習コーチです。次の問題について、関連知識・つまずきやすい点・覚え方の観点で、日本語でわかりやすく深掘り解説してください。丸暗記ではなく理解を促す方針で。',
+        'あなたは学習コーチです。次の問題を、丸暗記ではなく理解を促す方針で、日本語でわかりやすく深掘り解説してください。要点は見出しや箇条書きを使って読みやすくしてください。',
         `ドメイン: ${domain}`,
         `問題: ${q.q}`,
+        choice && q.choices && q.choices.length ? `選択肢:\n${q.choices.join('\n')}` : '',
         `模範解答: ${q.answer}`,
-        userAns ? `私の回答: ${userAns}` : ''
+        q.explanation ? `既存の解説(これを踏まえ、繰り返しより深掘り・補足を): ${q.explanation}` : '',
+        userAns ? `学習者の回答: ${userAns}` : '',
+        wrong
+          ? 'この回答は不正解でした。なぜ誤りか・正解とどう違うか・つまずきの原因を具体的に指摘してください。'
+          : '',
+        '観点: 関連知識 / つまずきやすい点 / 覚え方。'
       ]
         .filter(Boolean)
         .join('\n'),
@@ -229,7 +259,8 @@ export function Session({ domain, sessionId, questions, voice, rate, onDone }: P
           {speakControl}
         </div>
 
-        <h2 className="q">{q.q}</h2>
+        {prompt.instruction && <p className="q-instruction">{prompt.instruction}</p>}
+        <h2 className="q-body">{prompt.body}</h2>
 
         {choice ? (
           <ul className="choices">

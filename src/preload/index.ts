@@ -6,6 +6,7 @@ export interface Settings {
   root: string | null
   voice: string
   rate: number
+  fontSize: number
 }
 
 export interface DeepDiveArgs {
@@ -23,6 +24,8 @@ const api = {
   pickRoot: (): Promise<Settings> => ipcRenderer.invoke('config:pickRoot'),
   setVoice: (voice: string, rate: number): Promise<Settings> =>
     ipcRenderer.invoke('config:setVoice', voice, rate),
+  setFontSize: (fontSize: number): Promise<Settings> =>
+    ipcRenderer.invoke('config:setFontSize', fontSize),
 
   listDomains: (): Promise<DomainInfo[]> => ipcRenderer.invoke('domains:list'),
   pickSession: (domain: string, opts: PickOptions): Promise<PickedQuestion[]> =>

@@ -13,8 +13,12 @@ interface Settings {
   root: string | null
   voice: string
   rate: number
+  fontSize: number // question-body base font size in px (content scales off this)
 }
 const DEFAULT_ROOT = '/Volumes/workspace/github.com/akira-toriyama/study-log'
+const FONT_MIN = 16
+const FONT_MAX = 30
+const clampFont = (n: number): number => Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n)))
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
 
 async function loadSettings(): Promise<Settings> {
@@ -27,7 +31,12 @@ async function loadSettings(): Promise<Settings> {
   const envRoot = process.env.STUDY_LOG
   let root = envRoot ?? saved.root ?? (existsSync(DEFAULT_ROOT) ? DEFAULT_ROOT : null)
   if (root && !existsSync(root)) root = null
-  return { root, voice: saved.voice ?? 'Samantha', rate: saved.rate ?? 165 }
+  return {
+    root,
+    voice: saved.voice ?? 'Samantha',
+    rate: saved.rate ?? 165,
+    fontSize: clampFont(saved.fontSize ?? 20)
+  }
 }
 
 async function saveSettings(s: Settings): Promise<void> {
@@ -244,6 +253,11 @@ function registerIpc(): void {
   })
   ipcMain.handle('config:setVoice', async (_e, voice: string, rate: number) => {
     settings = { ...settings, voice, rate }
+    await saveSettings(settings)
+    return settings
+  })
+  ipcMain.handle('config:setFontSize', async (_e, fontSize: number) => {
+    settings = { ...settings, fontSize: clampFont(fontSize) }
     await saveSettings(settings)
     return settings
   })
