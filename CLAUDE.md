@@ -37,7 +37,7 @@ study-log/                       # private
 - `type`: `single_choice | multi | cloze | translation | free`。
 - `choices`: **選択式(`single_choice`/`multi`)のときだけ**文字列配列(各要素は `"A. …"` の形)。それ以外は `null`。
 - `answer`: `single_choice` は正解の記号(`"B"`)、`multi` は記号をカンマ連結(`"A,C"`)、`cloze`/`translation`/`free` は模範解答テキスト。
-- 任意キー: `hint`(答えを言わない一言ヒント。`null` 可。未設定でもアプリが学習時に Claude へ即席ヒストを頼める) / `speak`(`say` で読み上げる対象言語テキスト。非言語問題は `null`)。
+- 任意キー: `hint`(答えを言わない一言ヒント。`null` 可。未設定でもアプリが学習時に Claude へ即席ヒストを頼める) / `speak`(`say` で読み上げる対象言語テキスト。非言語問題は `null`) / `answer_ruby`(英語回答のカタカナルビ＝`[単語, カナ]` 対の配列。**サーフェス(各対の第1要素)を連結すると `answer` に完全一致**させる＝空白・句読点・日本語は読み `""` のトークンにする。英語を含む回答に付け、それ以外は `null`/省略。アプリが回答にふりがな(`<ruby>`)表示)。
 - **粒度は混在OK**。守るのは「各問に一意 ID」だけ(`state.json` が ID 基準で吸収)。AWS は `topic` でグルーピング(ファイル名 `s3-01.json`…)、英語は連番(`0001.json`…)。
 - **設計判断**: md フロントマター+本文ではなく **構造化 JSON 1 オブジェクト**に統一(パース自明・キー欠落をスキーマで検出・renderer が `import type` でそのまま扱える)。`learned/` だけは人が散文を育てるので md のまま。トピックのまとまりは `topic` フィールドとファイル名で表現する。
 

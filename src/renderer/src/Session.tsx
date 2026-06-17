@@ -400,20 +400,20 @@ export function Session({
               {isCorrect === null ? '模範解答' : isCorrect ? '正解' : '不正解'}：
               {q.answer_ruby && q.answer_ruby.length ? (
                 <b className="answer-ruby">
-                  {q.answer_ruby.map(([w, r], i) => (
-                    <ruby key={i}>
-                      {w}
-                      <rt>{r}</rt>
-                    </ruby>
-                  ))}
+                  {q.answer_ruby.map(([w, r], i) =>
+                    r ? (
+                      <ruby key={i}>
+                        {w}
+                        <rt>{r}</rt>
+                      </ruby>
+                    ) : (
+                      // spaces / punctuation / Japanese: plain text so word gaps survive
+                      <span key={i}>{w}</span>
+                    )
+                  )}
                 </b>
               ) : (
                 <b>{q.answer}</b>
-              )}
-              {!speakInPrompt && Boolean(q.speak) && (
-                <button type="button" className="icon speak-read" title="英語を読み上げ (R)" onClick={() => speakNow()}>
-                  🔊
-                </button>
               )}
             </div>
             <div className="explanation">{q.explanation}</div>
@@ -444,6 +444,11 @@ export function Session({
               ))}
             </div>
             <div className="actions">
+              {Boolean(q.speak) && (
+                <button type="button" className="ghost-btn" onClick={() => speakNow()}>
+                  🔊 英語を再生 (R)
+                </button>
+              )}
               <button className="ghost-btn" onClick={deepDive} disabled={diveLoading}>
                 🤔 深掘り
               </button>
