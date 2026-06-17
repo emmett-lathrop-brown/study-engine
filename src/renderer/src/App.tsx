@@ -51,10 +51,13 @@ export default function App(): JSX.Element {
       return
     }
     try {
-      const [d, s] = await Promise.all([api.listDomains(), api.stats()])
-      setDomains(d)
-      setStats(s)
+      setDomains(await api.listDomains())
       setView({ k: 'dashboard' })
+      try {
+        setStats(await api.stats())
+      } catch {
+        // stats are a nice-to-have; never let them blank the domain grid.
+      }
     } catch (e) {
       setError(String(e))
       setView({ k: 'dashboard' })
@@ -308,7 +311,7 @@ export default function App(): JSX.Element {
                       </div>
                     </div>
                   )}
-                  <div className="go">セッション開始 →</div>
+                  <div className="go">{learnMode ? '速習で開始 →' : 'セッション開始 →'}</div>
                 </button>
               )
             })}

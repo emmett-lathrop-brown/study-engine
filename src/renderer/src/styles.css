@@ -282,6 +282,13 @@ h1 {
 .domain-card:active {
   transform: translateY(1px);
 }
+.domain-card:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.domain-card:disabled:hover {
+  border-color: var(--line);
+}
 .dname {
   font-size: 17px;
   font-weight: 700;

@@ -120,8 +120,14 @@ export async function readReviews(root: string, domain: string): Promise<Review[
   } catch {
     return []
   }
-  return raw
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as Review)
+  const out: Review[] = []
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    try {
+      out.push(JSON.parse(line) as Review)
+    } catch {
+      // skip a malformed/partially-appended line (matches listQuestions/readState tolerance)
+    }
+  }
+  return out
 }

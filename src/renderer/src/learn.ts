@@ -9,7 +9,9 @@ import { api } from './api'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 const isFree = (t: string): boolean => t === 'cloze' || t === 'translation' || t === 'free'
-const normAns = (s: string): string => s.trim().replace(/\s+/g, ' ').toLowerCase()
+// Fold case AND punctuation so "EC2." / "EC2" / "ec2" dedupe to one key — keeps
+// a punctuation-twin of the answer from sneaking in as a (wrong-keyed) option.
+const normAns = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr]
