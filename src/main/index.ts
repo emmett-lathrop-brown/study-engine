@@ -8,7 +8,10 @@ import type { PickOptions } from '../engine/session'
 import { exportMarkdown } from '../engine/export'
 import { buildGenPrompt } from '../engine/gen'
 import { readChat, writeChat } from '../engine/store'
-import type { ChatMessage } from '../engine/types'
+import type { ChatMessage, SrsState } from '../engine/types'
+import { buildFsrs } from '../engine/srs-fsrs'
+import { reviewWith } from '../engine/srs-dispatch'
+import { todayISO } from '../engine/srs'
 
 // ---------------------------------------------------------------------------
 // Config (study-log path + TTS voice) persisted in userData/settings.json
@@ -19,10 +22,16 @@ interface Settings {
   rate: number
   fontSize: number // question-body base font size in px (content scales off this)
   autoSpeak: boolean
+  algo: 'sm2' | 'fsrs' // active scheduler; SM-2 is the load-bearing default
+  desiredRetention: number // FSRS target retention (0.80–0.97); inert under SM-2
 }
 const FONT_MIN = 16
 const FONT_MAX = 30
 const clampFont = (n: number): number => Math.max(FONT_MIN, Math.min(FONT_MAX, Math.round(n)))
+const RETENTION_MIN = 0.8
+const RETENTION_MAX = 0.97
+const clampRetention = (n: number): number =>
+  Number.isFinite(n) ? Math.max(RETENTION_MIN, Math.min(RETENTION_MAX, n)) : 0.9
 const settingsFile = (): string => join(app.getPath('userData'), 'settings.json')
 
 async function loadSettings(): Promise<Settings> {
@@ -42,7 +51,9 @@ async function loadSettings(): Promise<Settings> {
     voice: saved.voice ?? 'Samantha',
     rate: saved.rate ?? 165,
     fontSize: clampFont(saved.fontSize ?? 20),
-    autoSpeak: saved.autoSpeak ?? true
+    autoSpeak: saved.autoSpeak ?? true,
+    algo: saved.algo ?? 'sm2',
+    desiredRetention: clampRetention(saved.desiredRetention ?? 0.9)
   }
 }
 
@@ -257,6 +268,13 @@ function registerIpc(): void {
     await saveSettings(settings)
     return settings
   })
+  ipcMain.handle('config:setAlgo', async (_e, algo: 'sm2' | 'fsrs', desiredRetention: number) => {
+    const dr = clampRetention(desiredRetention)
+    settings = { ...settings, algo, desiredRetention: dr }
+    buildFsrs(dr) // live-apply retention so the FSRS scheduler reflects the slider
+    await saveSettings(settings)
+    return settings
+  })
 
   ipcMain.handle('repo:webBase', () => repoWebBase())
   ipcMain.handle('domains:list', () => domainInfo(requireRoot()))
@@ -267,10 +285,19 @@ function registerIpc(): void {
   ipcMain.handle(
     'session:grade',
     (_e, domain: string, session: string, id: string, grade: number) =>
-      gradeOne(requireRoot(), domain, session, id, grade)
+      gradeOne(requireRoot(), domain, session, id, grade, undefined, settings.algo)
   )
   ipcMain.handle('session:summary', (_e, domain: string, session: string) =>
     summary(requireRoot(), domain, session)
+  )
+  // Nominal next-interval per grade, computed in MAIN (which owns the active algo)
+  // so the renderer never imports the FSRS scheduler. SM-2 here is fuzz-free (seed
+  // 0) = the same nominal value the grade buttons showed before; the live record()
+  // still fuzzes the stored SM-2 interval (unchanged, long-accepted divergence).
+  ipcMain.handle(
+    'session:preview',
+    (_e, _domain: string, _id: string, state: SrsState, grades: number[]) =>
+      Object.fromEntries(grades.map((g) => [g, reviewWith(settings.algo, state, g, todayISO()).interval]))
   )
 
   ipcMain.handle('speak', (_e, text: string, voice?: string, rate?: number) =>
@@ -328,6 +355,7 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   settings = await loadSettings()
+  buildFsrs(settings.desiredRetention) // prime the FSRS instance with saved retention
   registerIpc()
   createWindow()
   app.on('activate', () => {

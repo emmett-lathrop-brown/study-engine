@@ -17,6 +17,8 @@ export interface Settings {
   rate: number
   fontSize: number
   autoSpeak: boolean
+  algo: 'sm2' | 'fsrs'
+  desiredRetention: number
 }
 
 const api = {
@@ -26,6 +28,8 @@ const api = {
     ipcRenderer.invoke('config:setVoice', voice, rate, autoSpeak),
   setFontSize: (fontSize: number): Promise<Settings> =>
     ipcRenderer.invoke('config:setFontSize', fontSize),
+  setAlgo: (algo: 'sm2' | 'fsrs', desiredRetention: number): Promise<Settings> =>
+    ipcRenderer.invoke('config:setAlgo', algo, desiredRetention),
 
   repoWebBase: (): Promise<string | null> => ipcRenderer.invoke('repo:webBase'),
   listDomains: (): Promise<DomainInfo[]> => ipcRenderer.invoke('domains:list'),
@@ -39,6 +43,13 @@ const api = {
     grade: number
   ): Promise<{ id: string; state: SrsState }> =>
     ipcRenderer.invoke('session:grade', domain, session, id, grade),
+  preview: (
+    domain: string,
+    id: string,
+    state: SrsState,
+    grades: number[]
+  ): Promise<Record<number, number>> =>
+    ipcRenderer.invoke('session:preview', domain, id, state, grades),
   summary: (domain: string, session: string): Promise<SessionSummary> =>
     ipcRenderer.invoke('session:summary', domain, session),
 

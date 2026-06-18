@@ -41,6 +41,7 @@ export default function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [claude, setClaude] = useState<ClaudeStatus | null>(null)
   const [claudeBusy, setClaudeBusy] = useState(false)
+  const [fsrsGateOpen, setFsrsGateOpen] = useState(false)
 
   const checkClaude = async (): Promise<void> => {
     setClaudeBusy(true)
@@ -92,6 +93,23 @@ export default function App(): JSX.Element {
 
   const setFontSize = async (fontSize: number): Promise<void> => {
     setConfig(await api.setFontSize(fontSize))
+  }
+
+  const applyAlgo = async (algo: 'sm2' | 'fsrs', desiredRetention: number): Promise<void> => {
+    setConfig(await api.setAlgo(algo, desiredRetention))
+  }
+
+  // Switching to FSRS while SM-2 history exists must pass the rebuild gate: those
+  // cards still hold SM-2 state, so grading them as FSRS before `rebuild-state
+  // --write --prune` would schedule off an un-migrated state. With no reviewed
+  // cards (total === new in every domain) there's nothing to migrate — apply直.
+  const onAlgoChange = (algo: 'sm2' | 'fsrs'): void => {
+    if (!config) return
+    if (algo === 'fsrs' && config.algo !== 'fsrs' && domains.some((d) => d.total - d.new > 0)) {
+      setFsrsGateOpen(true)
+      return
+    }
+    void applyAlgo(algo, config.desiredRetention)
   }
 
   // Drive content scale off the persisted font size (used by the question body,
@@ -279,6 +297,35 @@ export default function App(): JSX.Element {
   } else {
     content = (
       <div className="dashboard">
+        {fsrsGateOpen && config && (
+          <div className="modal-backdrop" onClick={() => setFsrsGateOpen(false)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+              <h3 className="modal-title">FSRS に切り替えますか？</h3>
+              <p className="modal-body">
+                既存の学習状態は SM-2 で計算されています。FSRS を有効にする前に、ターミナルで{' '}
+                <code>pnpm rebuild-state --write --prune</code>{' '}
+                を実行し、履歴から state.json を FSRS で再計算してください（自動バックアップが作られ、いつでも
+                SM-2 に戻せます）。
+                <br />
+                未移行のまま採点しても各カードの reps / interval から近似シードで継続します（壊れません）が、移行を推奨します。
+              </p>
+              <div className="modal-actions">
+                <button className="ghost-btn" onClick={() => setFsrsGateOpen(false)}>
+                  キャンセル
+                </button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    void applyAlgo('fsrs', config.desiredRetention)
+                    setFsrsGateOpen(false)
+                  }}
+                >
+                  FSRS を有効化
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {stats && (
           <>
             <div className="stats-strip">
@@ -316,6 +363,33 @@ export default function App(): JSX.Element {
             <input type="checkbox" checked={learnMode} onChange={(e) => setLearnMode(e.target.checked)} />
             速習(記述を4択に)
           </label>
+          {config && (
+            <>
+              <label>
+                方式
+                <select
+                  value={config.algo}
+                  onChange={(e) => onAlgoChange(e.target.value as 'sm2' | 'fsrs')}
+                >
+                  <option value="sm2">SM-2</option>
+                  <option value="fsrs">FSRS</option>
+                </select>
+              </label>
+              {config.algo === 'fsrs' && (
+                <label title="FSRS の目標保持率。高いほど復習が増えます。">
+                  目標保持率 {Math.round(config.desiredRetention * 100)}%
+                  <input
+                    type="range"
+                    min={80}
+                    max={97}
+                    step={1}
+                    value={Math.round(config.desiredRetention * 100)}
+                    onChange={(e) => void applyAlgo('fsrs', Number(e.target.value) / 100)}
+                  />
+                </label>
+              )}
+            </>
+          )}
         </div>
 
         <div className="claude-bar">

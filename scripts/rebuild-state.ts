@@ -22,9 +22,11 @@ import { fileURLToPath } from 'url'
 import { diffState, rebuildState } from '../src/engine/session'
 import { listReviewDomains, readReviews, writeState } from '../src/engine/store'
 import type { SrsState, StateMap } from '../src/engine/types'
+import type { Algo } from '../src/engine/srs-dispatch'
 
 interface Args {
   root?: string
+  algo?: Algo
   write: boolean
   prune: boolean
   verbose: boolean
@@ -35,6 +37,7 @@ const USAGE = `rebuild-state — recompute srs/state.json from reviews.jsonl
 
   pnpm rebuild-state                  dry-run against the configured study-log
   pnpm rebuild-state --root <path>    dry-run against a specific root
+  pnpm rebuild-state --algo sm2|fsrs  recompute with a specific scheduler (default: settings.json algo, else sm2)
   pnpm rebuild-state -v, --verbose    also list every changed / added / removed id
   pnpm rebuild-state --write          apply: merge rebuilt over current (keeps no-history entries)
   pnpm rebuild-state --write --prune  apply: replace state.json with exactly the history-derived map
@@ -48,7 +51,15 @@ function parseArgs(argv: string[]): Args {
   for (let i = 0; i < argv.length; i++) {
     const t = argv[i]
     if (t === '--root') a.root = argv[++i]
-    else if (t === '--write') a.write = true
+    else if (t === '--algo') {
+      const v = argv[++i]
+      if (v !== 'sm2' && v !== 'fsrs') {
+        console.error(`--algo must be sm2 or fsrs (got ${v ?? '∅'})\n`)
+        console.error(USAGE)
+        process.exit(2)
+      }
+      a.algo = v
+    } else if (t === '--write') a.write = true
     else if (t === '--prune') a.prune = true
     else if (t === '-v' || t === '--verbose') a.verbose = true
     else if (t === '-h' || t === '--help') a.help = true
@@ -126,6 +137,26 @@ async function resolveRoot(argRoot?: string): Promise<{ root: string; source: st
 }
 
 /**
+ * The app's persisted scheduler, read from settings.json. Resolved INDEPENDENTLY of
+ * the root so a rebuild follows the app's active algo even when the root came from
+ * --root or $STUDY_LOG (those don't carry it) — this keeps the "algo follows the app"
+ * guarantee for the documented migration (a bare `pnpm rebuild-state --write --prune`
+ * after the app is switched to FSRS). --algo always overrides; pass it to rebuild a
+ * foreign study-log, or sm2, regardless of the app's setting.
+ */
+async function readSettingsAlgo(): Promise<Algo | undefined> {
+  for (const f of settingsCandidates()) {
+    try {
+      const saved = JSON.parse(await fs.readFile(f, 'utf8')) as { algo?: unknown }
+      if (saved.algo === 'sm2' || saved.algo === 'fsrs') return saved.algo
+    } catch {
+      /* not this platform / not configured yet */
+    }
+  }
+  return undefined
+}
+
+/**
  * Read state.json strictly: a missing file is an empty map, but a present yet
  * unparseable file is a hard error. (The engine's tolerant readState() returns
  * {} on any error, which would make a --write merge silently behave like --prune
@@ -185,6 +216,10 @@ async function main(): Promise<void> {
     return
   }
   const { root, source } = await resolveRoot(args.root)
+  // --algo wins; else the app's persisted algo (settings.json, independent of how
+  // the root resolved); else SM-2 (the inert default).
+  const settingsAlgo = await readSettingsAlgo()
+  const algo: Algo = args.algo ?? settingsAlgo ?? 'sm2'
 
   // Scan the same way rebuildState discovers history (any logs/reviews.jsonl),
   // so the reported counts match what is actually rebuilt.
@@ -193,11 +228,14 @@ async function main(): Promise<void> {
   for (const d of domains) reviewCount += (await readReviews(root, d)).length
 
   const current = await readCurrentStrict(root)
-  const rebuilt = await rebuildState(root)
+  const rebuilt = await rebuildState(root, algo)
   const diff = diffState(current, rebuilt)
 
   console.log(`study-log root : ${root}`)
   console.log(`resolved via   : ${source}`)
+  console.log(
+    `algo           : ${algo}${args.algo ? ' (--algo)' : settingsAlgo ? ' (settings.json)' : ' (default)'}`
+  )
   console.log(`scanned        : ${domains.length} domain(s) with history, ${reviewCount} review(s)`)
   console.log(`state.json     : ${Object.keys(current).length} entries`)
   console.log(`rebuilt        : ${Object.keys(rebuilt).length} history-derived card(s)`)

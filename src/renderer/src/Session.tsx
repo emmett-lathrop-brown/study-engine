@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PickedQuestion } from '../../engine/types'
-import { review, todayISO } from '../../engine/srs'
 import { scoreWrite } from '../../engine/write'
 import { api } from './api'
 import { Markdown } from './Markdown'
@@ -95,6 +94,10 @@ export function Session({
   const [idCopied, setIdCopied] = useState(false)
   const [repoBase, setRepoBase] = useState<string | null>(null)
   const [shownId, setShownId] = useState(questions[0]?.id ?? '')
+  // Per-grade nominal next-interval, fetched from main (which owns the active
+  // algo). The renderer deliberately does NOT compute intervals itself — importing
+  // the FSRS scheduler would leak ts-fsrs into the bundle (see srs-dispatch).
+  const [previews, setPreviews] = useState<Record<number, number>>({})
 
   // GitHub blob base of the study-log repo, fetched once, for the source link.
   useEffect(() => {
@@ -124,6 +127,25 @@ export function Session({
     setIdCopied(true)
     window.setTimeout(() => setIdCopied(false), 1400)
   }, [q.id])
+
+  // Fetch the four grade previews once per card (cleared first so a card never
+  // shows the previous card's intervals during the round-trip). `live` drops a
+  // late response if the card changed again before it resolved.
+  useEffect(() => {
+    let live = true
+    setPreviews({})
+    void api
+      .preview(domain, q.id, q.state, [1, 2, 3, 4])
+      .then((p) => {
+        if (live) setPreviews(p)
+      })
+      .catch(() => {
+        /* leave previews empty → grade bar shows '…'; grading is unaffected */
+      })
+    return () => {
+      live = false
+    }
+  }, [domain, q.id, q.state])
 
   const choice = isChoiceType(q.type)
   const correct = useMemo(() => correctLetters(q.answer), [q.answer])
@@ -295,6 +317,11 @@ export function Session({
     </button>
   )
 
+  // main returns all four grades atomically, so previews is either {} (loading)
+  // or fully populated; the grade bar only renders post-reveal, by which point
+  // the per-card fetch has long resolved (the '…' fallback is effectively unseen).
+  const previewReady = Object.keys(previews).length > 0
+
   return (
     <div className={`session${chatOpen ? ' with-chat' : ''}`}>
       <header className="session-head">
@@ -463,7 +490,7 @@ export function Session({
                   <span className="gk">{gr.g}</span>
                   {gr.label}
                   <small>{gr.jp}</small>
-                  <span className="ivl">{intervalLabel(review(q.state, gr.g, todayISO()).interval)}</span>
+                  <span className="ivl">{previewReady ? intervalLabel(previews[gr.g] ?? 0) : '…'}</span>
                 </button>
               ))}
             </div>

@@ -23,6 +23,8 @@ export interface Settings {
   rate: number
   fontSize: number
   autoSpeak: boolean
+  algo: 'sm2' | 'fsrs'
+  desiredRetention: number
 }
 export interface ClaudeStatus {
   installed: boolean
@@ -40,11 +42,13 @@ export interface StudyApi {
   pickRoot(): Promise<Settings>
   setVoice(voice: string, rate: number, autoSpeak?: boolean): Promise<Settings>
   setFontSize(fontSize: number): Promise<Settings>
+  setAlgo(algo: 'sm2' | 'fsrs', desiredRetention: number): Promise<Settings>
   repoWebBase(): Promise<string | null>
   listDomains(): Promise<DomainInfo[]>
   stats(): Promise<StudyStats>
   pickSession(domain: string, opts: PickOptions): Promise<PickedQuestion[]>
   grade(domain: string, session: string, id: string, grade: number): Promise<{ id: string; state: SrsState }>
+  preview(domain: string, id: string, state: SrsState, grades: number[]): Promise<Record<number, number>>
   summary(domain: string, session: string): Promise<SessionSummary>
   genPrompt(domain: string): Promise<string>
   speak(text: string, voice?: string, rate?: number): Promise<void>
