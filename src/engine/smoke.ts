@@ -13,6 +13,8 @@ import {
   INTERVAL_MAX,
   LEECH_LAPSES
 } from './srs'
+import { reviewFsrs, defaultStateFsrs } from './srs-fsrs'
+import { reviewSm2 } from './srs-sm2'
 import { writeState, readState, readChat, writeChat } from './store'
 import { pick, record, summary, domainInfo, studyStats, rebuildState, diffState } from './session'
 import { exportMarkdown } from './export'
@@ -314,6 +316,83 @@ async function main(): Promise<void> {
   ok(live2[fid].interval !== exactMul, `record() actually fuzzed the final interval (got ${live2[fid].interval}, bare ${exactMul})`)
   ok(rebuilt2[fid].interval === live2[fid].interval, 'rebuildState reproduces the fuzzed multiplied interval bit-for-bit')
   ok(rebuilt2[fid].interval !== exactMul, 'rebuilt interval is the fuzzed value, not the bare multiple (would fail if the seed were dropped)')
+
+  // ===== FSRS block (dedicated froot; SM-2 state never shared) ==========
+  // A1/A2/B/D are pure unit checks (no disk). C is the only disk round-trip and
+  // uses its own froot. NOTE: like the SM-2 replay above, record()'s single-clock
+  // contract makes disk history always same-day, so block C exercises only the
+  // degenerate (elapsed-0) trajectory; day-gapped stability growth is covered by
+  // the pure unit checks in A2. The `on` override is non-replayable under FSRS too,
+  // so it is never used here.
+  const EXPECTED_FIRST_GOOD = 3 // measured: FSRS-6 default-w first Good (stability w[2]≈2.3065 -> 3d)
+  const EXPECTED_LAPSES_AFTER_3 = 3 // measured: 1 Good then 3 day-gapped Agains
+
+  // A1. FSRS single step (pure, same-day)
+  const fs0 = defaultStateFsrs(today)
+  const fg1 = reviewFsrs(fs0, 3, today)
+  ok(fg1.stability != null && fg1.difficulty != null, 'FSRS: first Good seeds stability/difficulty')
+  ok(fg1.interval >= 1, 'FSRS: first interval >= 1 day (short-term off)')
+  ok(fg1.interval === EXPECTED_FIRST_GOOD, `FSRS: first-Good interval pinned (got ${fg1.interval})`)
+  ok(fg1.due === addDays(today, fg1.interval), 'FSRS: due === addDays(on, interval)')
+  ok(fg1.algo === 'fsrs', 'FSRS: algo provenance recorded')
+  const fAgain = reviewFsrs(fg1, 1, today)
+  ok(fAgain.lapses === fg1.lapses + 1, 'FSRS: Again increments lapses')
+  ok((fAgain.stability ?? 0) <= (fg1.stability ?? 0), 'FSRS: lapse never raises stability')
+  ok(reviewFsrs(fg1, 4, today).interval >= reviewFsrs(fg1, 3, today).interval, 'FSRS: Easy >= Good interval')
+  ok(
+    reviewFsrs(fs0, 0, today).interval === reviewFsrs(fs0, 1, today).interval &&
+      reviewFsrs(fs0, 0, today).lapses === reviewFsrs(fs0, 1, today).lapses,
+    'FSRS: grade 0 == Again (clamped, no throw)'
+  )
+  ok(reviewFsrs(fs0, 5, today).interval === reviewFsrs(fs0, 4, today).interval, 'FSRS: grade 5 == Easy (clamped)')
+
+  // A2. day-gapped stability evolution (pure; prev.last_review in the past so the
+  // elapsed-days path runs — impossible to build on disk under the single clock)
+  const fday1 = '2026-01-01'
+  const fday2 = '2026-01-15' // 14-day gap
+  const fa = reviewFsrs(defaultStateFsrs(fday1), 3, fday1)
+  const fb = reviewFsrs(fa, 3, fday2)
+  ok((fb.stability ?? 0) > (fa.stability ?? 0), 'FSRS: day-gapped Good grows stability (elapsed-days exercised)')
+  ok(fb.interval > fa.interval, 'FSRS: day-gapped interval grows')
+  ok(reviewFsrs(fa, 3, fday2).stability === fb.stability, 'FSRS: day-gapped deterministic')
+  let fst = reviewFsrs(defaultStateFsrs(fday1), 3, fday1)
+  for (let i = 0; i < 3; i++) fst = reviewFsrs(fst, 1, addDays(fday1, (i + 1) * 5))
+  ok(fst.lapses === EXPECTED_LAPSES_AFTER_3, `FSRS: lapse count pinned for Again chain (got ${fst.lapses})`)
+
+  // B. determinism (enable_fuzz:false) + interval cap
+  ok(reviewFsrs(fs0, 3, today).interval === reviewFsrs(fs0, 3, today).interval, 'FSRS: deterministic (no fuzz)')
+  ok(reviewFsrs(fs0, 3, today).stability === reviewFsrs(fs0, 3, today).stability, 'FSRS: stability reproducible')
+  const fBig = {
+    interval: 0, ease: 2.5, due: today, reps: 9, lapses: 0,
+    stability: 10000, difficulty: 5, fsrs_state: 2 as const, last_review: '2020-01-01'
+  }
+  ok(reviewFsrs(fBig, 3, today).interval <= 365, 'FSRS: interval capped at maximum_interval')
+
+  // C. disk round-trip (same-day degenerate trajectory; see NOTE above)
+  const froot = await fs.mkdtemp(path.join(os.tmpdir(), 'study-smoke-fsrs-'))
+  const fsrsSess = `${today}-fsrs`
+  await record(froot, 'demo/set', fsrsSess, [{ id: 'fsrs-card-1', grade: 3 }], undefined, 'fsrs')
+  await record(froot, 'demo/set', fsrsSess, [{ id: 'fsrs-card-1', grade: 3 }], undefined, 'fsrs')
+  await record(froot, 'demo/set', fsrsSess, [{ id: 'fsrs-card-1', grade: 1 }], undefined, 'fsrs') // lapse
+  await record(froot, 'demo/set', fsrsSess, [{ id: 'fsrs-card-1', grade: 2 }], undefined, 'fsrs') // Hard
+  const liveF = await readState(froot)
+  const rebuiltF = await rebuildState(froot, 'fsrs')
+  ok(
+    JSON.stringify(rebuiltF['fsrs-card-1']) === JSON.stringify(liveF['fsrs-card-1']),
+    'FSRS: rebuildState replays a live (same-day) FSRS history bit-for-bit incl. stability/difficulty'
+  )
+  ok(rebuiltF['fsrs-card-1'].lapses === liveF['fsrs-card-1'].lapses, 'FSRS: replayed lapses match')
+  ok(rebuiltF['fsrs-card-1'].algo === 'fsrs', 'FSRS: replayed card tagged fsrs')
+  const dF = diffState(liveF, rebuiltF)
+  ok(
+    dF.changed.length === 0 && dF.added.length === 0 && dF.removed.length === 0,
+    'FSRS: live FSRS cards round-trip on dedicated root (changed === 0)'
+  )
+
+  // D. SM-2 regression lock (algo is not global state, so nothing to restore)
+  ok(review(defaultState(today), 3, today).interval === 1, 'SM-2 path intact (reps0 Good -> 1)')
+  ok(reviewSm2(defaultState(today), 3, today).interval === 1, 'SM-2 direct still 1')
+  await fs.rm(froot, { recursive: true, force: true })
 
   await fs.rm(root, { recursive: true, force: true })
 

@@ -9,15 +9,8 @@ import type {
   StateMap,
   StudyStats
 } from './types'
-import {
-  addDays,
-  defaultState,
-  fuzzSeed,
-  LEECH_LAPSES,
-  nowISO,
-  review as srsReview,
-  todayISO
-} from './srs'
+import { addDays, defaultState, fuzzSeed, LEECH_LAPSES, nowISO, todayISO } from './srs'
+import { reviewWith, defaultStateWith, type Algo } from './srs-dispatch'
 import {
   appendReview,
   domainPrefix,
@@ -143,7 +136,8 @@ export async function record(
   domain: string,
   session: string,
   grades: GradeInput[],
-  on?: string
+  on?: string,
+  algo: Algo = 'sm2'
 ): Promise<Array<{ id: string; state: SrsState }>> {
   // One clock read so the fuzz seed-day and the stored ts date can't disagree
   // (no midnight race): on the live path day === ts.slice(0,10), so a replay that
@@ -154,9 +148,10 @@ export async function record(
   const state = await readState(root)
   const results: Array<{ id: string; state: SrsState }> = []
   for (const g of grades) {
-    const prev = state[g.id] ?? defaultState(day)
+    const prev = state[g.id] ?? defaultStateWith(algo, day)
     // Seed fuzz from (id, day); reproducible from the review's stored ts on replay.
-    const next = srsReview(prev, g.grade, day, fuzzSeed(g.id, day))
+    // (FSRS ignores the seed — enable_fuzz:false — but shares SM-2's call signature.)
+    const next = reviewWith(algo, prev, g.grade, day, fuzzSeed(g.id, day))
     state[g.id] = next
     await appendReview(root, domain, { id: g.id, ts, grade: g.grade, session })
     results.push({ id: g.id, state: next })
@@ -171,9 +166,10 @@ export async function gradeOne(
   session: string,
   id: string,
   grade: number,
-  on?: string
+  on?: string,
+  algo: Algo = 'sm2'
 ): Promise<{ id: string; state: SrsState }> {
-  const [r] = await record(root, domain, session, [{ id, grade }], on)
+  const [r] = await record(root, domain, session, [{ id, grade }], on, algo)
   return r
 }
 
@@ -204,7 +200,7 @@ export async function gradeOne(
  * state.json after changing the scheduler (or migrating to FSRS), or as a smoke
  * invariant that record() and review() stay in agreement.
  */
-export async function rebuildState(root: string): Promise<StateMap> {
+export async function rebuildState(root: string, algo: Algo = 'sm2'): Promise<StateMap> {
   const byId = new Map<string, Review[]>()
   for (const domain of await listReviewDomains(root)) {
     for (const r of await readReviews(root, domain)) {
@@ -218,10 +214,10 @@ export async function rebuildState(root: string): Promise<StateMap> {
     // Seed from defaultState on the first review's day; interval/ease/reps are
     // overwritten by the first review() call, so only a sane starting `due`
     // matters here. Then replay in append order — the true event order.
-    let st = defaultState(reviews[0].ts.slice(0, 10))
+    let st = defaultStateWith(algo, reviews[0].ts.slice(0, 10))
     for (const r of reviews) {
       const day = r.ts.slice(0, 10)
-      st = srsReview(st, r.grade, day, fuzzSeed(r.id, day))
+      st = reviewWith(algo, st, r.grade, day, fuzzSeed(r.id, day))
     }
     state[id] = st
   }
