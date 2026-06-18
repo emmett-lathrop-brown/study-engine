@@ -1428,3 +1428,70 @@ h1 {
   margin: 0;
   font-size: 18px;
 }
+.cm-gain {
+  color: var(--good);
+  font-weight: 600;
+}
+.cram-checkpoint {
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 40px 28px;
+}
+.cram-checkpoint h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.cram-checkpoint-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.cram-checkpoint-actions .key {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+.cram-misslist {
+  width: 100%;
+  max-width: 520px;
+  margin: 4px auto 0;
+  text-align: left;
+}
+.cram-misslist h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.cram-misslist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cram-misslist li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+.cram-misslist .cm-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cram-misslist .cm-n {
+  flex-shrink: 0;
+  color: var(--again);
+  font-size: 12px;
+}
