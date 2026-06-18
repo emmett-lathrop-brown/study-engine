@@ -140,6 +140,28 @@ export function CramSession({ domain, cards, onExit }: Props): JSX.Element {
     setPhase('round')
   }
 
+  // Re-cram only the cards you stumbled on: reset their cram state to fresh and restart
+  // from round 0 over just that subset. Still ephemeral — no SRS writes. The set shrinks
+  // to the misses, so the progress bar / summary reflect the redrill, and repeating it
+  // drills down to a clean set.
+  const redrillMissed = (): void => {
+    const missed = cardsRef.current.filter((c) => c.incorrectCount > 0)
+    if (missed.length === 0) return
+    for (const c of missed) {
+      c.correctness = 0
+      c.appearedInRound = null
+      c.streak = 0
+      c.incorrectCount = 0
+    }
+    cardsRef.current = missed
+    setRoundStartMastered(0)
+    setRound(0)
+    setTimeline(buildRound(cardsRef.current, 0, rng, OPTS))
+    setPos(0)
+    resetItemUI()
+    setPhase('round')
+  }
+
   // Keyboard: A–D pick a single choice; Enter reveals a typed card / advances an MCQ
   // verdict / continues a checkpoint. A revealed typed card is NEVER advanced by Enter
   // — it must be self-judged with the ✓/✗ buttons (else the answer goes unrecorded).
@@ -224,9 +246,16 @@ export function CramSession({ domain, cards, onExit }: Props): JSX.Element {
                 </div>
               )}
               <p className="muted">Cram は学習履歴を変更しません（SRS の予定はそのままです）。</p>
-              <button className="primary" onClick={onExit}>
-                ダッシュボードへ戻る
-              </button>
+              <div className="cram-done-actions">
+                {missed.length > 0 && (
+                  <button className="ghost-btn" onClick={redrillMissed}>
+                    ↻ ミスだけもう一度（{missed.length}）
+                  </button>
+                )}
+                <button className="primary" onClick={onExit}>
+                  ダッシュボードへ戻る
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1432,6 +1432,13 @@ h1 {
   color: var(--good);
   font-weight: 600;
 }
+.cram-done-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
 .cram-checkpoint {
   align-items: center;
   text-align: center;
