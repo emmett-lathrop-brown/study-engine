@@ -18,6 +18,9 @@
     "src/renderer/**/*",
     "src/engine/types.ts",
     "src/engine/srs.ts",
+    "src/engine/srs-core.ts",
+    "src/engine/srs-sm2.ts",
+    "src/engine/srs-fsrs.ts",
     "src/engine/write.ts"
   ]
 }
