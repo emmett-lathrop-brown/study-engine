@@ -18,6 +18,8 @@ export {
   todayISO,
   nowISO,
   addDays,
-  fuzzSeed
+  fuzzSeed,
+  mulberry32,
+  fisherYates
 } from './srs-core'
 export { reviewSm2 as review, defaultStateSm2 as defaultState } from './srs-sm2'

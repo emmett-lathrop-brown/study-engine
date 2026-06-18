@@ -4,6 +4,7 @@
 //   - tuning constants (ease/interval/leech)
 //   - calendar helpers (todayISO / nowISO / addDays)
 //   - deterministic fuzz primitives (fuzzSeed / rng01 / fuzzInterval)
+//   - seeded generator + shuffle (mulberry32 / fisherYates) shared by session.ts pick() and cram.ts
 
 export const EASE_START = 2.5
 // Raised from Anki's classic 1.3: with Hard no longer cutting ease (see reviewSm2()),
@@ -87,4 +88,30 @@ export function fuzzInterval(interval: number, seed: number): number {
   const spread = Math.max(1, Math.round(interval * FUZZ_PCT))
   const delta = Math.round((rng01(seed) * 2 - 1) * spread)
   return Math.max(1, interval + delta)
+}
+
+/**
+ * Tiny seeded PRNG (mulberry32) — no deps, reproducible under a fixed seed. Unlike
+ * rng01 (a single draw), this returns a stateful generator for repeated draws.
+ * Shared so session.ts pick() and cram.ts shuffle from one implementation. Lives in
+ * srs-core (algorithm-independent, renderer-safe) so the renderer can use it too.
+ */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return (): number => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** Fisher-Yates shuffle in place using the given random source. */
+export function fisherYates<T>(arr: T[], rnd: () => number): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }

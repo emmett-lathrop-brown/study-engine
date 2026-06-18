@@ -9,16 +9,27 @@ import {
   todayISO,
   addDays,
   fuzzSeed,
+  mulberry32,
   EASE_MIN,
   INTERVAL_MAX,
   LEECH_LAPSES
 } from './srs'
 import { reviewFsrs, defaultStateFsrs } from './srs-fsrs'
 import { reviewSm2 } from './srs-sm2'
-import { writeState, readState, readChat, writeChat } from './store'
+import { writeState, readState, readChat, writeChat, listReviewDomains, readReviews } from './store'
 import { pick, record, summary, domainInfo, studyStats, rebuildState, diffState } from './session'
 import { exportMarkdown } from './export'
 import { scoreWrite } from './write'
+import {
+  initCram,
+  buildRound,
+  answerCram,
+  cramProgress,
+  CRAM_DEFAULTS,
+  type CardLike,
+  type CramCard,
+  type CramRoundItem
+} from './cram'
 
 let failures = 0
 function ok(cond: boolean, msg: string): void {
@@ -393,6 +404,153 @@ async function main(): Promise<void> {
   ok(review(defaultState(today), 3, today).interval === 1, 'SM-2 path intact (reps0 Good -> 1)')
   ok(reviewSm2(defaultState(today), 3, today).interval === 1, 'SM-2 direct still 1')
   await fs.rm(froot, { recursive: true, force: true })
+
+  // ===== Area 12: Cram/Learn round mode (engine-side pure core) =========
+  // MCQ data is hand-built (NOT via buildLearnQuestions), so these checks are
+  // independent of learn.ts's Math.random() and fully deterministic. The shuffle
+  // inside buildRound is driven by the injected rng: a constant 0.999999 yields the
+  // identity permutation (so pool order is observable), mulberry32(seed) a
+  // reproducible scramble. Placed before root teardown: #8 needs root's replay
+  // history intact.
+  const cl = (id: string, canEscalate = false): CardLike => ({
+    id,
+    q: `q ${id}`,
+    answer: 'A',
+    mcq: { choices: ['A. one', 'B. two', 'C. three', 'D. four'], answer: 'A' },
+    canEscalate
+  })
+  const ident = (): number => 0.999999 // floor(0.999999*(i+1)) === i => no-op swaps => identity
+
+  // #1 graduation: MCQ correct -> Familiar, TYPED correct -> Mastered
+  {
+    const cards = initCram([cl('g1', true)])
+    const tlM: CramRoundItem[] = [{ card: cards[0], type: 'mcq' }]
+    answerCram(cards, tlM, 0, tlM[0], true, CRAM_DEFAULTS)
+    ok(cards[0].correctness === 1, 'cram #1: MCQ correct -> Familiar (correctness 1)')
+    const tlT: CramRoundItem[] = [{ card: cards[0], type: 'typed' }]
+    answerCram(cards, tlT, 0, tlT[0], true, CRAM_DEFAULTS)
+    ok(cards[0].correctness === 2, 'cram #1: TYPED correct -> Mastered (correctness 2)')
+  }
+
+  // #2 a miss re-queues within the round, except in the final slot
+  {
+    const cards = initCram([cl('m1', true), cl('m2', true)])
+    const tl: CramRoundItem[] = [
+      { card: cards[0], type: 'mcq' },
+      { card: cards[1], type: 'mcq' }
+    ]
+    const r1 = answerCram(cards, tl, 0, tl[0], false, CRAM_DEFAULTS)
+    ok(
+      r1.timeline.length === 3 && cards[0].correctness === -1 && cards[0].incorrectCount === 1,
+      'cram #2: miss mid-round re-queues card (timeline +1, correctness -1, incorrect++)'
+    )
+    const lenAtFinal = r1.timeline.length
+    const last = r1.timeline.length - 1
+    answerCram(cards, r1.timeline, last, r1.timeline[last], false, CRAM_DEFAULTS)
+    ok(r1.timeline.length === lenAtFinal, 'cram #2: miss in the final slot does NOT re-queue (no infinite loop)')
+  }
+
+  // #3 pool priority: missed > rested-familiar > new (seen through the roundSize cap)
+  {
+    const cards = initCram([cl('p-missed'), cl('p-rested'), cl('p-new1'), cl('p-new2')])
+    cards[0].correctness = -1
+    cards[1].correctness = 1
+    cards[1].appearedInRound = 0 // rested by round 3 (3-0 >= reaskGap 2)
+    const ids = buildRound(cards, 3, ident, { ...CRAM_DEFAULTS, roundSize: 2 }).map((i) => i.card.card.id)
+    ok(
+      ids.length === 2 && ids[0] === 'p-missed' && ids[1] === 'p-rested',
+      `cram #3: round prioritizes missed > rested-familiar > new (got ${ids.join(',')})`
+    )
+  }
+
+  // #4 mastered cards are excluded from every round
+  {
+    const cards = initCram([cl('mx-done'), cl('mx-live')])
+    cards[0].correctness = 2
+    const ids = buildRound(cards, 0, ident, CRAM_DEFAULTS).map((i) => i.card.card.id)
+    ok(!ids.includes('mx-done') && ids.includes('mx-live'), 'cram #4: a mastered card never appears in a round')
+  }
+
+  // #5 progress counts mastery (not position); done when all mastered
+  {
+    const cards = initCram([cl('pr1'), cl('pr2')])
+    ok(cramProgress(cards).mastered === 0 && cramProgress(cards).done === false, 'cram #5: progress starts at 0 mastered, not done')
+    cards[0].correctness = 2
+    cards[1].correctness = 2
+    const p = cramProgress(cards)
+    ok(p.mastered === 2 && p.total === 2 && p.done === true, 'cram #5: all mastered -> done, mastered === total')
+  }
+
+  // #6 escalation: an escalable card is MCQ while unstudied, TYPED once Familiar
+  {
+    const cards = initCram([cl('e1', true)])
+    ok(buildRound(cards, 0, ident, CRAM_DEFAULTS)[0].type === 'mcq', 'cram #6: escalable card unstudied -> MCQ')
+    cards[0].correctness = 1
+    cards[0].appearedInRound = 0
+    ok(buildRound(cards, 2, ident, CRAM_DEFAULTS)[0].type === 'typed', 'cram #6: escalable card at Familiar -> TYPED')
+  }
+
+  // #6b choice-only (canEscalate=false): always MCQ, graduates on a 2-correct streak
+  {
+    const cards = initCram([cl('co1', false)])
+    const tl1 = buildRound(cards, 0, ident, CRAM_DEFAULTS)
+    ok(tl1[0].type === 'mcq', 'cram #6b: choice-only card -> always MCQ (no TYPED form)')
+    answerCram(cards, tl1, 0, tl1[0], true, CRAM_DEFAULTS)
+    ok(cards[0].correctness === 1 && cards[0].streak === 1, 'cram #6b: first MCQ correct -> Familiar, streak 1 (not yet mastered)')
+    const tl2 = buildRound(cards, 2, ident, CRAM_DEFAULTS)
+    ok(tl2[0].type === 'mcq', 'cram #6b: choice-only stays MCQ on re-ask')
+    answerCram(cards, tl2, 0, tl2[0], true, CRAM_DEFAULTS)
+    ok(cards[0].correctness === 2 && cards[0].streak === 2, 'cram #6b: choice-only graduates by streak (2 consecutive MCQ correct)')
+  }
+
+  // #7 determinism: the same seed yields the same round order
+  {
+    const deck = (): CramCard[] => initCram([cl('d1'), cl('d2'), cl('d3'), cl('d4'), cl('d5')])
+    const order = (rng: () => number): string =>
+      buildRound(deck(), 0, rng, CRAM_DEFAULTS)
+        .map((i) => i.card.card.id)
+        .join(',')
+    ok(order(mulberry32(12345)) === order(mulberry32(12345)), 'cram #7: same seed -> identical round order (deterministic shuffle)')
+  }
+
+  // #8 [SACRED] the cram core writes ZERO review rows and does not perturb rebuildState.
+  // Compared rebuild-to-rebuild (snapshotBefore vs snapshotAfter), NOT live-vs-rebuilt,
+  // so the hand-injected demo-set-b-0001 (always a live/rebuilt diff) is excluded and
+  // changed:0 is meaningful. root still holds replay-card-1 / replay-fuzz-* / demo-set-*.
+  const countRows = async (): Promise<number> => {
+    let n = 0
+    for (const d of await listReviewDomains(root)) n += (await readReviews(root, d)).length
+    return n
+  }
+  const reviewRowsBefore = await countRows()
+  const snapshotBefore = await rebuildState(root)
+  {
+    const cards = initCram([cl('cram-sacred-1', true), cl('cram-sacred-2', false)])
+    const rng = mulberry32(2026)
+    let tl = buildRound(cards, 0, rng, CRAM_DEFAULTS)
+    answerCram(cards, tl, 0, tl[0], true, CRAM_DEFAULTS)
+    answerCram(cards, tl, tl.length - 1, tl[tl.length - 1], false, CRAM_DEFAULTS)
+    tl = buildRound(cards, 1, rng, CRAM_DEFAULTS)
+    answerCram(cards, tl, 0, tl[0], true, CRAM_DEFAULTS)
+    cramProgress(cards)
+  }
+  ok((await countRows()) === reviewRowsBefore, `cram #8: cram core writes ZERO review rows (stayed at ${reviewRowsBefore})`)
+  const snapshotAfter = await rebuildState(root)
+  const cramDiff = diffState(snapshotBefore, snapshotAfter)
+  ok(
+    cramDiff.changed.length === 0 && cramDiff.added.length === 0 && cramDiff.removed.length === 0,
+    'cram #8: cram core does not perturb rebuildState output (rebuild-to-rebuild)'
+  )
+
+  // #8-static structural guard: the core can't reach a history-write path. smoke can't
+  // run the renderer, so CramSession.tsx's no-write property stays a PR-B review item;
+  // here we pin the engine core by source grep.
+  const cramSrc = await fs.readFile('src/engine/cram.ts', 'utf8')
+  ok(
+    !/\b(record|gradeOne|appendReview|writeState)\b/.test(cramSrc) &&
+      !/from ['"]\.\/(api|learn)['"]/.test(cramSrc),
+    'cram #8-static: cram.ts references no history-write API and does not import ./api or ./learn'
+  )
 
   await fs.rm(root, { recursive: true, force: true })
 

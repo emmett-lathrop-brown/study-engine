@@ -9,7 +9,16 @@ import type {
   StateMap,
   StudyStats
 } from './types'
-import { addDays, defaultState, fuzzSeed, LEECH_LAPSES, nowISO, todayISO } from './srs'
+import {
+  addDays,
+  defaultState,
+  fisherYates,
+  fuzzSeed,
+  LEECH_LAPSES,
+  mulberry32,
+  nowISO,
+  todayISO
+} from './srs'
 import { reviewWith, defaultStateWith, type Algo } from './srs-dispatch'
 import {
   appendReview,
@@ -29,27 +38,6 @@ export interface PickOptions {
   shuffle?: boolean // randomize order within due/new buckets (default true)
   seed?: number // PRNG seed for reproducible order (default Date.now())
   ids?: string[] // re-drill: build the session from exactly these question ids
-}
-
-/** Tiny seeded PRNG (mulberry32) — no deps, reproducible under a fixed seed. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0
-  return (): number => {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-/** Fisher-Yates shuffle in place using the given random source. */
-function fisherYates<T>(arr: T[], rnd: () => number): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
 }
 
 /** Build a session: due reviews first, then fill with new questions. */

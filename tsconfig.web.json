@@ -20,6 +20,7 @@
     "src/engine/srs.ts",
     "src/engine/srs-core.ts",
     "src/engine/srs-sm2.ts",
-    "src/engine/write.ts"
+    "src/engine/write.ts",
+    "src/engine/cram.ts"
   ]
 }
