@@ -5,6 +5,7 @@ import { api, Settings, VOICES, ClaudeStatus } from './api'
 import { Session } from './Session'
 import { Summary } from './Summary'
 import { Heatmap } from './Heatmap'
+import { InfoTip } from './InfoTip'
 import { buildLearnQuestions } from './learn'
 
 type View =
@@ -331,7 +332,12 @@ export default function App(): JSX.Element {
             <div className="stats-strip">
               <div className="stat-pill">
                 <span className="sp-num">🔥 {stats.streak}</span>
-                <span className="sp-lbl">継続(日)</span>
+                <span className="sp-lbl">
+                  継続(日)
+                  <InfoTip term="ストリーク（継続日数）">
+                    1日でも学習した日が、何日連続で続いているか。毎日続けるほど伸びます。
+                  </InfoTip>
+                </span>
               </div>
               <div className="stat-pill">
                 <span className="sp-num">{stats.reviewsToday}</span>
@@ -339,7 +345,12 @@ export default function App(): JSX.Element {
               </div>
               <div className="stat-pill">
                 <span className="sp-num">{stats.totalReviews}</span>
-                <span className="sp-lbl">総レビュー</span>
+                <span className="sp-lbl">
+                  総レビュー
+                  <InfoTip term="総レビュー">
+                    これまでに採点した延べ回数（問題数ではなく、解いた回数の累計）。
+                  </InfoTip>
+                </span>
               </div>
               <div className="stat-pill">
                 <span className="sp-num">{stats.reviewedDays}</span>
@@ -357,16 +368,25 @@ export default function App(): JSX.Element {
           </label>
           <label>
             うち新規 最大
+            <InfoTip term="新規カード">
+              まだ一度も解いていないカード。1回のセッションに混ぜる新規問題の上限です。
+            </InfoTip>
             <input type="number" min={0} max={50} value={maxNew} onChange={(e) => setMaxNew(Number(e.target.value))} />問
           </label>
           <label className="check">
             <input type="checkbox" checked={learnMode} onChange={(e) => setLearnMode(e.target.checked)} />
             速習(記述を4択に)
+            <InfoTip term="速習モード">
+              記述式の問題をその場で4択に変換して手早く回す練習モード。成績は通常モードと同じく記録されます。
+            </InfoTip>
           </label>
           {config && (
             <>
               <label>
                 方式
+                <InfoTip term="方式（復習アルゴリズム）">
+                  復習の間隔を決める計算方式。SM-2＝Anki でも使われる定番。FSRS＝記憶の定着度を1問ごとに推定する新しい方式で、より効率的とされます。迷ったら SM-2 のままで大丈夫です。
+                </InfoTip>
                 <select
                   value={config.algo}
                   onChange={(e) => onAlgoChange(e.target.value as 'sm2' | 'fsrs')}
@@ -376,8 +396,11 @@ export default function App(): JSX.Element {
                 </select>
               </label>
               {config.algo === 'fsrs' && (
-                <label title="FSRS の目標保持率。高いほど復習が増えます。">
+                <label>
                   目標保持率 {Math.round(config.desiredRetention * 100)}%
+                  <InfoTip term="目標保持率">
+                    FSRS が狙う「復習した時に思い出せている確率」。高いほど忘れにくい代わりに復習が増え、低いほど復習が減ります。既定は 90%。
+                  </InfoTip>
                   <input
                     type="range"
                     min={80}
@@ -426,7 +449,41 @@ export default function App(): JSX.Element {
         {domains.length === 0 ? (
           <p className="muted">問題のあるドメインがありません。study-log に問題を追加してください。</p>
         ) : (
-          <div className="domain-grid">
+          <>
+            <div className="term-legend">
+              <span className="tl-lead">カードの状態:</span>
+              <span>
+                復習
+                <InfoTip term="復習（due）">
+                  復習予定日が今日以前まで来ていて、出題待ちになっているカード。
+                </InfoTip>
+              </span>
+              <span>
+                新規
+                <InfoTip term="新規">まだ一度も解いていないカード。</InfoTip>
+              </span>
+              <span>
+                習得
+                <InfoTip term="習得（mature）">
+                  復習間隔が21日以上に伸びた、しっかり定着しているカード。
+                </InfoTip>
+              </span>
+              <span>
+                学習中
+                <InfoTip term="学習中">一度は解いたが、まだ復習間隔が短い育成中のカード。</InfoTip>
+              </span>
+              <span>
+                未
+                <InfoTip term="未（未学習）">まだ一度も解いていない、学習履歴のないカード。</InfoTip>
+              </span>
+              <span>
+                🐌
+                <InfoTip term="leech（苦手カード）">
+                  {LEECH_LAPSES}回以上ミスしている「なかなか覚えられない」カード。🐌 の目印が付きます（自動で出題を止めることはしません）。
+                </InfoTip>
+              </span>
+            </div>
+            <div className="domain-grid">
             {domains.map((d) => {
               const m = stats?.maturity.find((x) => x.domain === d.domain)
               const pct = (n: number): string => (m && m.total ? `${(n / m.total) * 100}%` : '0%')
@@ -470,6 +527,7 @@ export default function App(): JSX.Element {
               )
             })}
           </div>
+          </>
         )}
 
         <footer className="foot">

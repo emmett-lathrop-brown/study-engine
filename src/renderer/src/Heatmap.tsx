@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { DayCount } from '../../engine/types'
 import { addDays, todayISO } from '../../engine/srs'
+import { InfoTip } from './InfoTip'
 
 // GitHub-style contribution grid: WEEKS columns of 7 days (Sun..Sat), the
 // rightmost column being the current week. The engine hands us only the non-zero
@@ -66,7 +67,12 @@ export function Heatmap({ daily }: { daily: DayCount[] }): JSX.Element {
   return (
     <div className="heatmap">
       <div className="heatmap-head">
-        <span className="hm-title">学習ヒートマップ（直近{WEEKS}週）</span>
+        <span className="hm-title">
+          学習ヒートマップ（直近{WEEKS}週）
+          <InfoTip term="学習ヒートマップ">
+            日ごとの学習量をマスの色の濃さで表したカレンダー。濃いマスほど、その日たくさん復習したことを表します。
+          </InfoTip>
+        </span>
         <span className="heatmap-legend">
           少
           <span className="hm-cell l0" />

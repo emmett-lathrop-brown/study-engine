@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { SessionSummary } from '../../engine/types'
 import { api } from './api'
+import { InfoTip } from './InfoTip'
 
 interface Props {
   data: SessionSummary
@@ -52,7 +53,11 @@ export function Summary({ data, sessionId, onBack, onRetry, onRedrill }: Props):
       <div className="hero-score">
         <div className="hero-pct">{data.accuracy}%</div>
         <div className="hero-sub">
-          {data.correct} / {data.total} 正解（Good+）・{data.domain}
+          {data.correct} / {data.total} 正解（Good+）
+          <InfoTip term="正解（Good+）">
+            自己評価が Good 以上（Good / Easy）だった回答を「正解」として正答率に数えます。
+          </InfoTip>
+          ・{data.domain}
         </div>
       </div>
 

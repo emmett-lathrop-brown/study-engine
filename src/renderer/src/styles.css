@@ -245,6 +245,83 @@ h1 {
   justify-content: flex-end;
 }
 
+/* ---------- info tooltips (explain app jargon) ---------- */
+.infotip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+.infotip-icon {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin-left: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.infotip-icon:hover {
+  color: var(--accent);
+}
+.infotip-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: max-content;
+  max-width: 260px;
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  text-align: left;
+  white-space: normal;
+  cursor: default;
+}
+/* Transparent bridge over the 6px gap so a hovering cursor moving from the ⓘ onto
+   the popover never crosses an unhovered dead zone (would unmount the popover). */
+.infotip-pop::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 6px;
+}
+.infotip-term {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.infotip-body {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.term-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.term-legend > .tl-lead {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
 /* ---------- dashboard stats ---------- */
 .stats-strip {
   display: flex;
