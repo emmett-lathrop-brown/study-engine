@@ -243,7 +243,13 @@ function sameState(a: SrsState, b: SrsState): boolean {
     a.reps === b.reps &&
     a.lapses === b.lapses &&
     (a.last_review ?? '') === (b.last_review ?? '') &&
-    (a.last_grade ?? 0) === (b.last_grade ?? 0)
+    (a.last_grade ?? 0) === (b.last_grade ?? 0) &&
+    (a.stability ?? 0) === (b.stability ?? 0) &&
+    (a.difficulty ?? 0) === (b.difficulty ?? 0) &&
+    (a.fsrs_state ?? 0) === (b.fsrs_state ?? 0) &&
+    // include algo so a half-migrated (sm2/fsrs mixed) map shows up as changed.
+    // undefined normalizes to 'sm2', so old SM-2 records compare equal to fresh ones.
+    (a.algo ?? 'sm2') === (b.algo ?? 'sm2')
   )
 }
 

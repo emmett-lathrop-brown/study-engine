@@ -152,9 +152,17 @@ async function readCurrentStrict(root: string): Promise<StateMap> {
 
 /** Compact "field: from → to" for the rows that actually moved. */
 function changedFields(from: SrsState, to: SrsState): string {
-  const keys: (keyof SrsState)[] = ['interval', 'ease', 'due', 'reps', 'lapses', 'last_review', 'last_grade']
+  const keys: (keyof SrsState)[] = [
+    'interval', 'ease', 'due', 'reps', 'lapses', 'last_review', 'last_grade',
+    'stability', 'difficulty', 'fsrs_state', 'algo'
+  ]
+  // Per-field default mirrors sameState exactly so this row-level diff agrees
+  // with it: algo undefined == 'sm2'; the FSRS numerics undefined == 0 (so a
+  // literal fsrs_state:0 isn't reported as moved vs an undefined one); else null.
+  const def = (k: keyof SrsState): unknown =>
+    k === 'algo' ? 'sm2' : k === 'stability' || k === 'difficulty' || k === 'fsrs_state' ? 0 : null
   return keys
-    .filter((k) => (from[k] ?? null) !== (to[k] ?? null))
+    .filter((k) => (from[k] ?? def(k)) !== (to[k] ?? def(k)))
     .map((k) => `${k} ${from[k] ?? '∅'}→${to[k] ?? '∅'}`)
     .join(', ')
 }

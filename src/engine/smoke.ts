@@ -272,6 +272,26 @@ async function main(): Promise<void> {
   const self = diffState(live, live)
   ok(self.changed.length === 0 && self.added.length === 0 && self.unchanged > 0, 'diffState: identical maps report no changes')
 
+  // PR-2 (optional FSRS state fields): sameState/diffState must account for the
+  // new fields. `algo` undefined normalizes to 'sm2', so a plain SM-2 card is
+  // equal to an explicit-sm2 card (no false "changed" during an algo=sm2 rebuild);
+  // a populated FSRS field is a genuine change.
+  const pr2Base = { interval: 10, ease: 2.5, due: today, reps: 3, lapses: 0, last_review: today, last_grade: 3 }
+  const pr2Implicit = { x: { ...pr2Base } }
+  const pr2Explicit = { x: { ...pr2Base, algo: 'sm2' as const } }
+  const pr2Same = diffState(pr2Implicit, pr2Explicit)
+  ok(pr2Same.unchanged === 1 && pr2Same.changed.length === 0,
+    'diffState: algo undefined == "sm2" (a plain SM-2 card is not flagged as changed)')
+  const pr2Fsrs = { x: { ...pr2Base, stability: 4.93, difficulty: 5.1, fsrs_state: 2 as const, algo: 'fsrs' as const } }
+  const pr2Diff = diffState(pr2Implicit, pr2Fsrs)
+  ok(pr2Diff.changed.length === 1 && pr2Diff.unchanged === 0,
+    'diffState: a card with populated FSRS fields differs from a plain SM-2 card')
+  // algo on its own is load-bearing in the diff (surfaces a half-migrated map).
+  const pr2AlgoOnly = { x: { ...pr2Base, algo: 'fsrs' as const } }
+  const pr2AlgoDiff = diffState(pr2Explicit, pr2AlgoOnly)
+  ok(pr2AlgoDiff.changed.length === 1 && pr2AlgoDiff.unchanged === 0,
+    'diffState: a card differing only by algo (sm2 vs fsrs) registers as changed')
+
   // Fuzz must survive the round-trip. Pick an id whose multiplied interval is
   // actually jittered TODAY (~2/3 of seeds move it), drive it live to exactly
   // that interval as its FINAL state, then assert the rebuilt interval equals

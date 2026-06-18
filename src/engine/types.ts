@@ -26,13 +26,19 @@ export interface Question {
 }
 
 export interface SrsState {
-  interval: number // days until next review
-  ease: number
-  due: string // YYYY-MM-DD
+  interval: number // days until next review (FSRS writes its scheduled interval here too)
+  ease: number // SM-2 ease factor; an inert placeholder for FSRS cards (see FSRS design §2.1)
+  due: string // YYYY-MM-DD (both algorithms write it; pick() reads due<=today)
   reps: number
   lapses: number
   last_review?: string // YYYY-MM-DD
   last_grade?: number
+  // FSRS fields — all optional so existing SM-2 records and state.json stay valid.
+  // Written only by the FSRS scheduler (PR-3); SM-2 cards leave them undefined.
+  stability?: number // FSRS memory stability in days (rounded to 4 dp)
+  difficulty?: number // FSRS difficulty in [1,10] (rounded to 4 dp)
+  fsrs_state?: 0 | 1 | 2 | 3 // ts-fsrs State enum: New / Learning / Review / Relearning
+  algo?: 'sm2' | 'fsrs' // which scheduler last touched this card (provenance; undefined == sm2)
 }
 
 export type StateMap = Record<string, SrsState>
