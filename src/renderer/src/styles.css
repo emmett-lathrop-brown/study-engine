@@ -1397,3 +1397,34 @@ h1 {
   color: var(--easy);
   background: #16263f;
 }
+
+/* Cram (round-study) mode — minimal styling layered on the shared session/card UI */
+.pill.cram-pill {
+  color: var(--good);
+  border-color: var(--good);
+  font-weight: 600;
+}
+.cram-counter {
+  white-space: nowrap;
+}
+.cram-selfjudge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cram-done {
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 44px 28px;
+}
+.cram-done h2 {
+  margin: 0;
+  font-size: 26px;
+}
+.cram-done-stat {
+  margin: 0;
+  font-size: 18px;
+}

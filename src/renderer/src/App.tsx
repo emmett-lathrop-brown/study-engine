@@ -6,13 +6,36 @@ import { Session } from './Session'
 import { Summary } from './Summary'
 import { Heatmap } from './Heatmap'
 import { InfoTip } from './InfoTip'
+import { CramSession } from './CramSession'
 import { buildLearnQuestions } from './learn'
+import { initCram, type CardLike, type CramCard } from '../../engine/cram'
+
+type Mode = 'normal' | 'learn' | 'cram'
+
+const isFreeType = (t: string): boolean => t === 'cloze' || t === 'translation' || t === 'free'
+
+// Map a picked question (and its buildLearnQuestions output) to the cram core's
+// CardLike. canEscalate = the source was free-recall (cloze/translation/free), i.e.
+// it has a TYPED form. MCQ leg: native single_choice/multi keep their own choices; a
+// free card uses the converted 4-choice when Claude produced one, else null (no MCQ
+// leg → cram shows it as a recall card).
+function toCardLike(orig: PickedQuestion, conv?: PickedQuestion): CardLike {
+  const fromFree = isFreeType(orig.type)
+  let mcq: { choices: string[]; answer: string } | null = null
+  if (!fromFree) {
+    if (orig.choices && orig.choices.length) mcq = { choices: orig.choices, answer: orig.answer }
+  } else if (conv && conv.type === 'single_choice' && conv.choices && conv.choices.length) {
+    mcq = { choices: conv.choices, answer: conv.answer }
+  }
+  return { id: orig.id, q: orig.q, answer: orig.answer, choices: orig.choices, mcq, canEscalate: fromFree }
+}
 
 type View =
   | { k: 'loading' }
   | { k: 'needRoot' }
   | { k: 'dashboard' }
   | { k: 'session'; domain: string; sessionId: string; questions: PickedQuestion[] }
+  | { k: 'cram'; domain: string; cards: CramCard[] }
   | { k: 'summary'; domain: string; sessionId: string; data: SessionSummary }
 
 function makeSessionId(d = new Date()): string {
@@ -32,7 +55,7 @@ export default function App(): JSX.Element {
   const [view, setView] = useState<View>({ k: 'loading' })
   const [limit, setLimit] = useState(15)
   const [maxNew, setMaxNew] = useState(8)
-  const [learnMode, setLearnMode] = useState(false)
+  const [mode, setMode] = useState<Mode>('normal')
   const [busy, setBusy] = useState(false)
   const [preparing, setPreparing] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -141,8 +164,17 @@ export default function App(): JSX.Element {
             : '出題できる問題がありません(問題ファイルが無い、または全て先の予定)。'
         )
         setView({ k: 'dashboard' })
+      } else if (mode === 'cram' && !redrillIds) {
+        // Cram: build the 4-choice legs (free→MCQ via Claude; native choice passes
+        // through), then hand CardLikes to the ephemeral round engine. The cram view
+        // carries no sessionId — it never writes SRS history.
+        setPreparing(true)
+        const mcq = await buildLearnQuestions(qs)
+        setPreparing(false)
+        const byId = new Map(mcq.map((m) => [m.id, m]))
+        setView({ k: 'cram', domain, cards: initCram(qs.map((qq) => toCardLike(qq, byId.get(qq.id)))) })
       } else {
-        if (learnMode) {
+        if (mode === 'learn') {
           // Turn free-recall questions into 4-choice (may call Claude for distractors).
           setPreparing(true)
           qs = await buildLearnQuestions(qs)
@@ -285,6 +317,8 @@ export default function App(): JSX.Element {
         onDone={() => void onSessionDone(view.domain, view.sessionId)}
       />
     )
+  } else if (view.k === 'cram') {
+    content = <CramSession domain={view.domain} cards={view.cards} onExit={() => void refresh()} />
   } else if (view.k === 'summary') {
     content = (
       <Summary
@@ -373,12 +407,16 @@ export default function App(): JSX.Element {
             </InfoTip>
             <input type="number" min={0} max={50} value={maxNew} onChange={(e) => setMaxNew(Number(e.target.value))} />問
           </label>
-          <label className="check">
-            <input type="checkbox" checked={learnMode} onChange={(e) => setLearnMode(e.target.checked)} />
-            速習(記述を4択に)
-            <InfoTip term="速習モード">
-              記述式の問題をその場で4択に変換して手早く回す練習モード。成績は通常モードと同じく記録されます。
+          <label>
+            モード
+            <InfoTip term="学習モード">
+              通常＝SRS の予定どおり採点して記録。速習＝記述をその場で4択に変換して手早く回す（記録あり）。Cram＝セットを覚えきるまで反復する練習（記録なし・SRS の予定は変わりません）。
             </InfoTip>
+            <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
+              <option value="normal">通常</option>
+              <option value="learn">速習（記録あり）</option>
+              <option value="cram">Cram（記録なし・反復）</option>
+            </select>
           </label>
           {config && (
             <>
@@ -444,7 +482,11 @@ export default function App(): JSX.Element {
 
         {error && <div className="error">{error}</div>}
         {genMsg && <div className="gen-note">{genMsg}</div>}
-        {preparing && <div className="prep-note">速習の選択肢を生成中…</div>}
+        {preparing && (
+          <div className="prep-note">
+            {mode === 'cram' ? 'Cram の選択肢を生成中…' : '速習の選択肢を生成中…'}
+          </div>
+        )}
 
         {domains.length === 0 ? (
           <p className="muted">問題のあるドメインがありません。study-log に問題を追加してください。</p>
@@ -513,7 +555,13 @@ export default function App(): JSX.Element {
                         </div>
                       </div>
                     )}
-                    <div className="go">{learnMode ? '速習で開始 →' : 'セッション開始 →'}</div>
+                    <div className="go">
+                      {mode === 'cram'
+                        ? 'Cram で開始 →'
+                        : mode === 'learn'
+                          ? '速習で開始 →'
+                          : 'セッション開始 →'}
+                    </div>
                   </button>
                   <button
                     className="ghost-btn sm gen-btn"
