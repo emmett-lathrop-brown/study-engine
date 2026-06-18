@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } from 'electron'
 import { spawn } from 'child_process'
 import { existsSync, promises as fs, readdirSync } from 'fs'
 import { homedir } from 'os'
@@ -330,11 +330,20 @@ function registerIpc(): void {
 // Window
 // ---------------------------------------------------------------------------
 function createWindow(): void {
+  // Open at a comfortable size for the wide dashboard/session layout (content maxes
+  // at 1120, with-chat 1500) instead of a fixed 1000px that clipped it on launch.
+  // Scale to the monitor — ~90% of the work area, capped — and centre, so it feels
+  // right on a laptop and a large external display alike. Users can still resize down
+  // (minWidth/minHeight unchanged); the responsive CSS handles narrower widths.
+  const { width: areaW, height: areaH } = screen.getPrimaryDisplay().workAreaSize
+  const width = Math.min(1320, Math.round(areaW * 0.9))
+  const height = Math.min(860, Math.round(areaH * 0.9))
   const win = new BrowserWindow({
-    width: 1000,
-    height: 780,
+    width,
+    height,
     minWidth: 720,
     minHeight: 560,
+    center: true,
     show: false,
     title: 'Study',
     backgroundColor: '#0f1115',
