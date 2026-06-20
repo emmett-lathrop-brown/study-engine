@@ -4,7 +4,7 @@
 
 - 暗記管理は **アプリ + Git** に一本化(Anki/外部SRS は使わない)。
 - 問題は**収集せず生成**(一次情報を根拠に Claude Code が作る、出典URL併記)。
-- データは全部**素の JSON**(問題・状態・履歴)+ md(`learned/` ノートのみ)。個人データは private な [`study-log`](https://github.com/akira-toriyama/study-log) に置き、このリポ(public)は**仕組みだけ**。
+- データは全部**素の JSON**(問題・状態・履歴)+ md(`learned/` ノートのみ)。個人データは private な [`study-log`](https://github.com/emmett-lathrop-brown/study-log) に置き、このリポ(public)は**仕組みだけ**。
 
 ## スタック
 
